@@ -38,6 +38,7 @@ partial class MainForm
     private Label lblVerdict = null!;
     private Label lblVerdictDetail = null!;
     // Main
+    private SplitContainer splitBody = null!;
     private TableLayoutPanel pnlMain = null!;
     private Panel pnlLogs = null!;
     private Label lblLogsHeader = null!;
@@ -87,6 +88,7 @@ partial class MainForm
         pnlVerdict = new Panel();
         lblVerdict = new Label();
         lblVerdictDetail = new Label();
+        splitBody = new SplitContainer();
         pnlMain = new TableLayoutPanel();
         pnlLogs = new Panel();
         lblLogsHeader = new Label();
@@ -113,13 +115,12 @@ partial class MainForm
         root.Dock = DockStyle.Fill;
         root.BackColor = Theme.Background;
         root.ColumnCount = 1;
-        root.RowCount = 6;
+        root.RowCount = 5;
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56F));   // header
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // health strip
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // verdict
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // main (Case Logs gets the room)
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // event logs
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // main + event logs (draggable split)
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));    // manual (hidden)
 
         // --- Header ---
@@ -357,12 +358,22 @@ partial class MainForm
         pnlManual.Controls.Add(btnScan);
 
         // place rows
+        // Case Logs area (top) and Event Logs (bottom) share a draggable splitter.
+        splitBody.Dock = DockStyle.Fill;
+        splitBody.Orientation = Orientation.Horizontal;
+        splitBody.FixedPanel = FixedPanel.Panel2;   // keep the Event Logs height on resize
+        splitBody.SplitterWidth = 6;
+        splitBody.Panel1MinSize = 200;
+        splitBody.Panel2MinSize = 64;
+        splitBody.BackColor = Theme.Border;          // makes the splitter bar visible
+        splitBody.Panel1.Controls.Add(pnlMain);
+        splitBody.Panel2.Controls.Add(pnlEvents);
+
         root.Controls.Add(pnlHeader, 0, 0);
         root.Controls.Add(pnlHealth, 0, 1);
         root.Controls.Add(pnlVerdict, 0, 2);
-        root.Controls.Add(pnlMain, 0, 3);
-        root.Controls.Add(pnlEvents, 0, 4);
-        root.Controls.Add(pnlManual, 0, 5);
+        root.Controls.Add(splitBody, 0, 3);
+        root.Controls.Add(pnlManual, 0, 4);
 
         // MainForm
         AutoScaleDimensions = new SizeF(7F, 15F);

@@ -33,11 +33,13 @@ public sealed class SettingsForm : Form
     private TextBox _station = null!;
     // InExpress
     private TextBox _inxServer = null!, _inxDb = null!, _inxUser = null!, _inxPass = null!, _inxProc = null!;
+    private Label _inxUserLbl = null!, _inxPassLbl = null!;
     private CheckBox _inxIntegrated = null!;
     private NumericUpDown _inxTimeout = null!;
     private Label _inxResult = null!;
     // CCube
     private TextBox _ccServer = null!, _ccDb = null!, _ccUser = null!, _ccPass = null!;
+    private Label _ccUserLbl = null!, _ccPassLbl = null!;
     private CheckBox _ccIntegrated = null!;
     private Label _ccResult = null!;
     // PLC
@@ -91,10 +93,10 @@ public sealed class SettingsForm : Form
         _inxServer = AddText("Server", ref y);
         _inxDb = AddText("Database", ref y);
         _inxIntegrated = AddCheck("Use Windows login (integrated security)", ref y);
-        _inxUser = AddText("SQL username", ref y);
-        _inxPass = AddText("SQL password", ref y, password: true);
+        (_inxUserLbl, _inxUser) = AddLabeledText("SQL username", ref y);
+        (_inxPassLbl, _inxPass) = AddLabeledText("SQL password", ref y, password: true);
         _inxProc = AddText("Validate procedure", ref y);
-        _inxTimeout = AddNumber("Timeout (seconds)", ref y, 1, 30);
+        _inxTimeout = AddNumber("Validation Timeout (secs)", ref y, 1, 30);
         var (btnTestInx, inxResult) = AddTestRow("Test InExpress connection", ref y);
         _inxResult = inxResult;
         btnTestInx.Click += async (_, _) =>
@@ -102,15 +104,16 @@ public sealed class SettingsForm : Form
             string conn = SqlConnStringsFromFields(_inxServer, _inxDb, _inxIntegrated, _inxUser, _inxPass);
             await RunTest(btnTestInx, _inxResult, () => ConnectionTester.TestSql(conn));
         };
-        _inxIntegrated.CheckedChanged += (_, _) => ApplyIntegratedToggle(_inxIntegrated, _inxUser, _inxPass);
+        _inxIntegrated.CheckedChanged += (_, _) =>
+            ApplyIntegratedToggle(_inxIntegrated, _inxUser, _inxPass, _inxUserLbl, _inxPassLbl);
 
         // --- CCube ---
         y = Section("C-Cube database (history)", y);
         _ccServer = AddText("Server", ref y);
         _ccDb = AddText("Database", ref y);
         _ccIntegrated = AddCheck("Use Windows login (integrated security)", ref y);
-        _ccUser = AddText("SQL username", ref y);
-        _ccPass = AddText("SQL password", ref y, password: true);
+        (_ccUserLbl, _ccUser) = AddLabeledText("SQL username", ref y);
+        (_ccPassLbl, _ccPass) = AddLabeledText("SQL password", ref y, password: true);
         var (btnTestCc, ccResult) = AddTestRow("Test C-Cube connection", ref y);
         _ccResult = ccResult;
         btnTestCc.Click += async (_, _) =>
@@ -118,7 +121,8 @@ public sealed class SettingsForm : Form
             string conn = SqlConnStringsFromFields(_ccServer, _ccDb, _ccIntegrated, _ccUser, _ccPass);
             await RunTest(btnTestCc, _ccResult, () => ConnectionTester.TestSql(conn));
         };
-        _ccIntegrated.CheckedChanged += (_, _) => ApplyIntegratedToggle(_ccIntegrated, _ccUser, _ccPass);
+        _ccIntegrated.CheckedChanged += (_, _) =>
+            ApplyIntegratedToggle(_ccIntegrated, _ccUser, _ccPass, _ccUserLbl, _ccPassLbl);
 
         // --- PLC ---
         y = Section("PLC (Siemens S7-1200)", y);
@@ -187,8 +191,14 @@ public sealed class SettingsForm : Form
     };
 
     private TextBox AddText(string label, ref int y, int width = 380, bool password = false)
+        => AddLabeledText(label, ref y, password, width).box;
+
+    // Like AddText, but also returns the label so callers can show/hide the whole row.
+    private (Label label, TextBox box) AddLabeledText(string label, ref int y,
+        bool password = false, int width = 380)
     {
-        _body.Controls.Add(MakeLabel(label, 24, y + 4, Theme.Text));
+        var lbl = MakeLabel(label, 24, y + 4, Theme.Text);
+        _body.Controls.Add(lbl);
         var box = new TextBox
         {
             Location = new Point(230, y),
@@ -201,7 +211,7 @@ public sealed class SettingsForm : Form
         _body.Controls.Add(box);
         _editable.Add(box);
         y += 36;
-        return box;
+        return (lbl, box);
     }
 
     private CheckBox AddCheck(string label, ref int y)
@@ -412,12 +422,8 @@ public sealed class SettingsForm : Form
         {
             control.Enabled = editable;
         }
-        // Respect the integrated-security toggles even while editing.
-        if (editable)
-        {
-            ApplyIntegratedToggle(_inxIntegrated, _inxUser, _inxPass);
-            ApplyIntegratedToggle(_ccIntegrated, _ccUser, _ccPass);
-        }
+        ApplyIntegratedToggle(_inxIntegrated, _inxUser, _inxPass, _inxUserLbl, _inxPassLbl);
+        ApplyIntegratedToggle(_ccIntegrated, _ccUser, _ccPass, _ccUserLbl, _ccPassLbl);
 
         _saveButton.Enabled = editable;
         _editButton.Enabled = !editable;
@@ -428,12 +434,16 @@ public sealed class SettingsForm : Form
         _lockState.ForeColor = editable ? Theme.Accent : Theme.Muted;
     }
 
-    // When "use Windows login" is ticked, the username/password boxes don't apply.
-    private static void ApplyIntegratedToggle(CheckBox integrated, TextBox user, TextBox pass)
+    // When "use Windows login" is ticked, the SQL username/password fields don't
+    // apply, so hide them (and their labels).
+    private static void ApplyIntegratedToggle(CheckBox integrated, TextBox user, TextBox pass,
+        Label userLabel, Label passLabel)
     {
-        bool useSql = !integrated.Checked;
-        user.Enabled = useSql && integrated.Enabled;
-        pass.Enabled = useSql && integrated.Enabled;
+        bool showSql = !integrated.Checked;
+        user.Visible = showSql;
+        pass.Visible = showSql;
+        userLabel.Visible = showSql;
+        passLabel.Visible = showSql;
     }
 
     // Build a SQL connection string from the current field values (UI thread).

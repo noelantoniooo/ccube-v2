@@ -152,6 +152,10 @@ public partial class MainForm : Form
 
             // Manual Scan starts hidden; the operator opens it with the button.
             ShowManual(false);
+
+            // Give Event Logs a sensible starting height once the form is laid out
+            // (the user can drag the splitter to resize it).
+            BeginInvoke(new Action(SetInitialEventsHeight));
             AppLog.Info("Run screen ready.");
         }
         catch (Exception ex)
@@ -513,6 +517,28 @@ public partial class MainForm : Form
     // Manual scan
     // -------------------------------------------------------------------------
 
+    // Start the Event Logs panel a little taller than the minimum; the splitter
+    // lets the operator drag it to any size after that.
+    private void SetInitialEventsHeight()
+    {
+        try
+        {
+            const int desiredEvents = 150;
+            int max = splitBody.Height - splitBody.Panel2MinSize - splitBody.SplitterWidth;
+            int min = splitBody.Panel1MinSize;
+            if (max <= min)
+            {
+                return;
+            }
+            splitBody.SplitterDistance =
+                Math.Clamp(splitBody.Height - desiredEvents - splitBody.SplitterWidth, min, max);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Could not set the initial Event Logs height.", ex);
+        }
+    }
+
     private void btnManual_Click(object? sender, EventArgs e) => ShowManual(!_manualVisible);
 
     // Flip light/dark. The theme is chosen at start-up, so we save the choice and
@@ -536,7 +562,7 @@ public partial class MainForm : Form
     {
         _manualVisible = show;
         pnlManual.Visible = show;
-        root.RowStyles[5].Height = show ? 48 : 0;
+        root.RowStyles[4].Height = show ? 48 : 0;
         lblModeBadge.Visible = show;
 
         // The button reads as a toggle: it names the mode you'd switch TO, and
