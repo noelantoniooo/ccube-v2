@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    C-Cube v2 — the one and only project.
+    This is a Windows desktop (WinForms) app that runs on .NET 10.
+    Everything the app needs is described here: what kind of app it is,
+    which .NET version it targets, and which NuGet packages it uses.
+  -->
+
+  <PropertyGroup>
+    <!-- WinExe = a windowed desktop app (no console window pops up). -->
+    <OutputType>WinExe</OutputType>
+
+    <!-- .NET 10 on Windows. "-windows" is required for WinForms. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+
+    <!-- Turn on WinForms (Forms, controls, the visual designer). -->
+    <UseWindowsForms>true</UseWindowsForms>
+
+    <!-- Modern C# niceties. Nullable helps the compiler warn about
+         "this might be null" bugs before they happen. -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- The name of the built program: CCube.exe -->
+    <AssemblyName>CCube</AssemblyName>
+    <RootNamespace>CCube</RootNamespace>
+
+    <!-- The plant PC is 64-bit Windows. -->
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <!-- Show a friendly version number on the app. -->
+    <Version>2.0.0</Version>
+  </PropertyGroup>
+
+  <!--
+    NuGet packages = ready-made libraries we borrow.
+    'dotnet build' downloads these automatically the first time.
+      * S7netplus                - talks to the Siemens S7-1200 PLC
+      * Microsoft.Data.SqlClient  - talks to SQL Server (InExpress + CCube DB)
+    (Windows DPAPI, used to encrypt saved DB passwords, is built into the
+     .NET 10 Windows runtime - no package needed.)
+  -->
+  <ItemGroup>
+    <PackageReference Include="S7netplus" Version="0.20.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+  </ItemGroup>
+
+  <!-- Header logos - copied next to the .exe so the app can load them at run time.
+       To use your OWN logo, just replace these PNG files (keep the same names). -->
+  <ItemGroup>
+    <Content Include="Resources\logo-controlsystems.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

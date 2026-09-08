@@ -1,0 +1,17 @@
+{
+  // Lets you press F5 in VS Code to run and debug C-Cube.
+  // (In Visual Studio you don't need this - just press F5 there.)
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run C-Cube",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/CCube/bin/Debug/net10.0-windows/CCube.dll",
+      "cwd": "${workspaceFolder}/CCube",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

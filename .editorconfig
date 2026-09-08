@@ -1,0 +1,26 @@
+# .editorconfig - shared formatting rules so the code looks the same for everyone.
+# Visual Studio and VS Code both read this automatically. You don't run it.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# C# style: prefer clear, explicit code (nice for learning).
+csharp_prefer_braces = true:suggestion
+dotnet_sort_system_directives_first = true
+
+[*.{json,csproj,slnx,xml,config}]
+indent_style = space
+indent_size = 2
+
+[*.{ps1,md}]
+indent_style = space
+indent_size = 2
