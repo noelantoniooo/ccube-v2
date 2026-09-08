@@ -199,10 +199,10 @@ partial class MainForm
         btnTheme.Margin = new Padding(8, 0, 0, 0);
         btnTheme.Cursor = Cursors.Hand;
         btnTheme.Click += btnTheme_Click;
-        // Right-to-left flow: Configuration is right-most, the theme toggle sits
-        // directly next to it, then Manual Scan, the station and the badge.
-        headerRight.Controls.Add(btnConfig);
+        // Right-to-left flow: the theme toggle is right-most, then Configuration,
+        // then Manual Scan, the station and the badge.
         headerRight.Controls.Add(btnTheme);
+        headerRight.Controls.Add(btnConfig);
         headerRight.Controls.Add(btnManual);
         headerRight.Controls.Add(lblStation);
         headerRight.Controls.Add(lblModeBadge);
