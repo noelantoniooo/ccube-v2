@@ -92,7 +92,9 @@ public partial class MainForm : Form
             {
                 used += list.Columns[i].Width;
             }
-            filler.Width = Math.Max(0, list.ClientSize.Width - used);
+            // Leave a few pixels so the columns never total more than the client
+            // width (which would show a horizontal scrollbar).
+            filler.Width = Math.Max(0, list.ClientSize.Width - used - 4);
         }
         list.SizeChanged += (_, _) => SizeFiller();
         list.HandleCreated += (_, _) => SizeFiller();
@@ -155,7 +157,7 @@ public partial class MainForm : Form
 
             // Give Event Logs a sensible starting height once the form is laid out
             // (the user can drag the splitter to resize it).
-            BeginInvoke(new Action(SetInitialEventsHeight));
+            BeginInvoke(new Action(SetInitialLayout));
             AppLog.Info("Run screen ready.");
         }
         catch (Exception ex)
@@ -517,25 +519,42 @@ public partial class MainForm : Form
     // Manual scan
     // -------------------------------------------------------------------------
 
-    // Start the Event Logs panel a little taller than the minimum; the splitter
-    // lets the operator drag it to any size after that.
-    private void SetInitialEventsHeight()
+    // Give the two splitters sensible starting positions once the form is laid
+    // out (large), then set their minimum drag sizes. The operator can drag
+    // either bar to resize afterwards.
+    private void SetInitialLayout()
+    {
+        // Event Logs height (horizontal split below Case Logs); Panel2 = Event Logs.
+        SizeSplitter(splitBody, size: splitBody.Height, desiredPanel2: 150, panel1Min: 200, panel2Min: 64);
+        // Right-column width (vertical split beside Case Logs); Panel2 = right column.
+        SizeSplitter(splitMain, size: splitMain.Width, desiredPanel2: 366, panel1Min: 380, panel2Min: 260);
+    }
+
+    // Sets a splitter to leave 'desiredPanel2' for Panel2, then tightens the min
+    // drag sizes - in that order, because SplitterDistance must already satisfy
+    // the minimums when they're applied.
+    private static void SizeSplitter(SplitContainer sc, int size, int desiredPanel2, int panel1Min, int panel2Min)
     {
         try
         {
-            const int desiredEvents = 150;
-            int max = splitBody.Height - splitBody.Panel2MinSize - splitBody.SplitterWidth;
-            int min = splitBody.Panel1MinSize;
-            if (max <= min)
+            int hardMax = size - sc.Panel2MinSize - sc.SplitterWidth;
+            if (hardMax <= sc.Panel1MinSize)
             {
-                return;
+                return; // container still too small; leave the defaults
             }
-            splitBody.SplitterDistance =
-                Math.Clamp(splitBody.Height - desiredEvents - splitBody.SplitterWidth, min, max);
+            sc.SplitterDistance = Math.Clamp(
+                size - desiredPanel2 - sc.SplitterWidth, sc.Panel1MinSize, hardMax);
+
+            if (panel1Min <= sc.SplitterDistance &&
+                panel2Min <= size - sc.SplitterDistance - sc.SplitterWidth)
+            {
+                sc.Panel1MinSize = panel1Min;
+                sc.Panel2MinSize = panel2Min;
+            }
         }
         catch (Exception ex)
         {
-            AppLog.Warn("Could not set the initial Event Logs height.", ex);
+            AppLog.Warn("Could not size a splitter.", ex);
         }
     }
 
