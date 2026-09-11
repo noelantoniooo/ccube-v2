@@ -46,9 +46,6 @@ public partial class MainForm : Form
         BuildHealthStrip();
         BuildSidePanel();
 
-        // Header logo (safe if the file is missing - the box just stays blank).
-        pbLogo.Image = LoadLogo("logo-controlsystems.png");
-
         // Give buttons a subtle hover/press response so clicks feel responsive.
         AddClickFeedback(btnConfig);
         AddClickFeedback(btnManual);
@@ -99,29 +96,6 @@ public partial class MainForm : Form
         list.SizeChanged += (_, _) => SizeFiller();
         list.HandleCreated += (_, _) => SizeFiller();
         SizeFiller();
-    }
-
-    // Loads a header logo from the Resources folder next to the .exe. Returns null
-    // if the file isn't there (replace the PNG to change the logo).
-    private static Image? LoadLogo(string fileName)
-    {
-        try
-        {
-            string path = Path.Combine(AppContext.BaseDirectory, "Resources", fileName);
-            if (File.Exists(path))
-            {
-                // Read via a stream copy so the file isn't left locked on disk.
-                byte[] bytes = File.ReadAllBytes(path);
-                using var ms = new MemoryStream(bytes);
-                return Image.FromStream(ms);
-            }
-            AppLog.Warn($"Header logo not found: {path}");
-        }
-        catch (Exception ex)
-        {
-            AppLog.Warn($"Could not load header logo '{fileName}'.", ex);
-        }
-        return null;
     }
 
     private void MainForm_Load(object? sender, EventArgs e)

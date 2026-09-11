@@ -48,12 +48,5 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
   </ItemGroup>
 
-  <!-- Header logos - copied next to the .exe so the app can load them at run time.
-       To use your OWN logo, just replace these PNG files (keep the same names). -->
-  <ItemGroup>
-    <Content Include="Resources\logo-controlsystems.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
 
 </Project>

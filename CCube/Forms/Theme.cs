@@ -55,8 +55,28 @@ public static class Theme
     public static Color LedGrey => C(Rgb(155, 166, 176), Rgb(120, 128, 138));
     public static Color LedAmber => Rgb(224, 161, 38);
 
+    // Picks the first installed font from the list (else falls back to Segoe UI),
+    // using its Bold style when the family has one.
+    private static Font PickFont(float size, params string[] names)
+    {
+        FontFamily[] installed = new System.Drawing.Text.InstalledFontCollection().Families;
+        foreach (string name in names)
+        {
+            FontFamily? family = Array.Find(installed,
+                f => f.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (family is not null)
+            {
+                FontStyle style = family.IsStyleAvailable(FontStyle.Bold)
+                    ? FontStyle.Bold : FontStyle.Regular;
+                return new Font(family, size, style);
+            }
+        }
+        return new Font("Segoe UI", size, FontStyle.Bold);
+    }
+
     // Fonts (same in both themes; kept compact so everything fits on one screen)
-    public static readonly Font BrandFont = new("Segoe UI", 17F, FontStyle.Bold);
+    // Brand uses Bahnschrift (an industrial DIN-style face) when available.
+    public static readonly Font BrandFont = PickFont(22F, "Bahnschrift SemiBold", "Bahnschrift", "Segoe UI Semibold");
     public static readonly Font BrandSubFont = new("Segoe UI", 8.5F, FontStyle.Regular);
     public static readonly Font TitleFont = new("Segoe UI", 20F, FontStyle.Bold);
     public static readonly Font VerdictFont = new("Segoe UI Semibold", 40F, FontStyle.Bold);

@@ -56,6 +56,10 @@ public sealed class SettingsForm : Form
         BuildUi();
         LoadFromSettings();
         SetEditable(false); // always start locked
+
+        // Re-flow once the form is actually shown - before that, Control.Visible
+        // reports false for everything, so the reflow can't tell what's hidden.
+        Shown += (_, _) => RelayoutBody();
     }
 
     // -------------------------------------------------------------------------
@@ -63,6 +67,47 @@ public sealed class SettingsForm : Form
     // -------------------------------------------------------------------------
 
     private Panel _body = null!;
+
+    // Each visual row (label+field, header, etc.). Lets us re-flow the body so the
+    // space collapses when the SQL username/password rows are hidden.
+    private readonly List<RowSlot> _rows = new();
+    private int _firstRowTop;
+    private sealed record RowSlot((Control Control, int Dy)[] Items, int Height);
+
+    private void RegisterRow(int top, int height, params Control[] controls)
+    {
+        if (_rows.Count == 0)
+        {
+            _firstRowTop = top;
+        }
+        var items = new (Control, int)[controls.Length];
+        for (int i = 0; i < controls.Length; i++)
+        {
+            items[i] = (controls[i], controls[i].Top - top);
+        }
+        _rows.Add(new RowSlot(items, height));
+    }
+
+    // Lay the rows out top-to-bottom, skipping any whose controls are hidden, so
+    // hiding the credential rows removes the gap instead of leaving empty space.
+    private void RelayoutBody()
+    {
+        _body.SuspendLayout();
+        int y = _firstRowTop;
+        foreach (RowSlot row in _rows)
+        {
+            if (!row.Items[0].Control.Visible)
+            {
+                continue;
+            }
+            foreach ((Control control, int dy) in row.Items)
+            {
+                control.Top = y + dy;
+            }
+            y += row.Height;
+        }
+        _body.ResumeLayout();
+    }
 
     private void BuildUi()
     {
@@ -82,6 +127,7 @@ public sealed class SettingsForm : Form
             24, y, Theme.Muted);
         _lockState.AutoSize = true;
         _body.Controls.Add(_lockState);
+        RegisterRow(y, 40, _lockState);
         y += 40;
 
         // --- General ---
@@ -174,11 +220,13 @@ public sealed class SettingsForm : Form
 
     private int Section(string title, int y)
     {
+        int top = y;
         y += 12;
         var header = MakeLabel(title, 20, y, Theme.Accent);
         header.Font = Theme.BoldFont;
         header.AutoSize = true;
         _body.Controls.Add(header);
+        RegisterRow(top, 42, header);
         return y + 30;
     }
 
@@ -210,6 +258,7 @@ public sealed class SettingsForm : Form
         };
         _body.Controls.Add(box);
         _editable.Add(box);
+        RegisterRow(y, 36, lbl, box);
         y += 36;
         return (lbl, box);
     }
@@ -225,13 +274,15 @@ public sealed class SettingsForm : Form
         };
         _body.Controls.Add(box);
         _editable.Add(box);
+        RegisterRow(y, 34, box);
         y += 34;
         return box;
     }
 
     private NumericUpDown AddNumber(string label, ref int y, int min, int max)
     {
-        _body.Controls.Add(MakeLabel(label, 24, y + 4, Theme.Text));
+        var lbl = MakeLabel(label, 24, y + 4, Theme.Text);
+        _body.Controls.Add(lbl);
         var box = new NumericUpDown
         {
             Location = new Point(230, y),
@@ -244,6 +295,7 @@ public sealed class SettingsForm : Form
         };
         _body.Controls.Add(box);
         _editable.Add(box);
+        RegisterRow(y, 36, lbl, box);
         y += 36;
         return box;
     }
@@ -252,6 +304,7 @@ public sealed class SettingsForm : Form
     // the caller can wire an async click that shows a loader on the button.
     private (Button button, Label result) AddTestRow(string buttonText, ref int y)
     {
+        int top = y;
         var button = new Button
         {
             Text = buttonText,
@@ -280,6 +333,7 @@ public sealed class SettingsForm : Form
             ForeColor = Theme.Muted,
         };
         _body.Controls.Add(result);
+        RegisterRow(top, 80, button, result);
 
         y += 40;
         return (button, result);
@@ -425,8 +479,10 @@ public sealed class SettingsForm : Form
         ApplyIntegratedToggle(_inxIntegrated, _inxUser, _inxPass, _inxUserLbl, _inxPassLbl);
         ApplyIntegratedToggle(_ccIntegrated, _ccUser, _ccPass, _ccUserLbl, _ccPassLbl);
 
-        _saveButton.Enabled = editable;
-        _editButton.Enabled = !editable;
+        // Show only one of Edit / Save at a time (Save appears after admin unlock,
+        // Edit comes back after saving).
+        _saveButton.Visible = editable;
+        _editButton.Visible = !editable;
         _changeAdminButton.Visible = editable; // only offer it while editing
         _lockState.Text = editable
             ? "✏️  Editing. Make your changes, then click Save."
@@ -435,8 +491,8 @@ public sealed class SettingsForm : Form
     }
 
     // When "use Windows login" is ticked, the SQL username/password fields don't
-    // apply, so hide them (and their labels).
-    private static void ApplyIntegratedToggle(CheckBox integrated, TextBox user, TextBox pass,
+    // apply, so hide them (and their labels) and re-flow so the gap closes.
+    private void ApplyIntegratedToggle(CheckBox integrated, TextBox user, TextBox pass,
         Label userLabel, Label passLabel)
     {
         bool showSql = !integrated.Checked;
@@ -444,6 +500,7 @@ public sealed class SettingsForm : Form
         pass.Visible = showSql;
         userLabel.Visible = showSql;
         passLabel.Visible = showSql;
+        RelayoutBody();
     }
 
     // Build a SQL connection string from the current field values (UI thread).

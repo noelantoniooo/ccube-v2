@@ -23,7 +23,6 @@ partial class MainForm
     private TableLayoutPanel root = null!;
     // Header
     private Panel pnlHeader = null!;
-    private PictureBox pbLogo = null!;
     private Label lblBrand = null!;
     private Label lblBrandSub = null!;
     private Label lblStation = null!;
@@ -76,7 +75,6 @@ partial class MainForm
 
         root = new TableLayoutPanel();
         pnlHeader = new Panel();
-        pbLogo = new PictureBox();
         lblBrand = new Label();
         lblBrandSub = new Label();
         lblStation = new Label();
@@ -126,20 +124,16 @@ partial class MainForm
         // --- Header ---
         pnlHeader.Dock = DockStyle.Fill;
         pnlHeader.BackColor = Theme.HeaderGreen;
-        pbLogo.BackColor = Color.White;
-        pbLogo.SizeMode = PictureBoxSizeMode.Zoom;
-        pbLogo.Location = new Point(16, 8);
-        pbLogo.Size = new Size(46, 40);
         lblBrand.Text = "C-CUBE";
         lblBrand.Font = Theme.BrandFont;
         lblBrand.ForeColor = Color.White;
         lblBrand.AutoSize = true;
-        lblBrand.Location = new Point(74, 7);
+        lblBrand.Location = new Point(22, 6);
         lblBrandSub.Text = "Central Case Checker  ·  PMFTC";
         lblBrandSub.Font = Theme.BrandSubFont;
         lblBrandSub.ForeColor = Theme.HeaderText;
         lblBrandSub.AutoSize = true;
-        lblBrandSub.Location = new Point(76, 34);
+        lblBrandSub.Location = new Point(24, 36);
 
         var headerRight = new FlowLayoutPanel
         {
@@ -208,7 +202,6 @@ partial class MainForm
         headerRight.Controls.Add(lblStation);
         headerRight.Controls.Add(lblModeBadge);
         pnlHeader.Controls.Add(headerRight);
-        pnlHeader.Controls.Add(pbLogo);
         pnlHeader.Controls.Add(lblBrand);
         pnlHeader.Controls.Add(lblBrandSub);
 
