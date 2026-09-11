@@ -115,7 +115,7 @@ partial class MainForm
         root.ColumnCount = 1;
         root.RowCount = 5;
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56F));   // header
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));   // header
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // health strip
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // verdict
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // main + event logs (draggable split)
@@ -128,12 +128,12 @@ partial class MainForm
         lblBrand.Font = Theme.BrandFont;
         lblBrand.ForeColor = Color.White;
         lblBrand.AutoSize = true;
-        lblBrand.Location = new Point(22, 6);
+        lblBrand.Location = new Point(22, 11);
         lblBrandSub.Text = "Central Case Checker  ·  PMFTC";
         lblBrandSub.Font = Theme.BrandSubFont;
         lblBrandSub.ForeColor = Theme.HeaderText;
         lblBrandSub.AutoSize = true;
-        lblBrandSub.Location = new Point(24, 36);
+        lblBrandSub.Location = new Point(24, 44);
 
         var headerRight = new FlowLayoutPanel
         {
@@ -143,7 +143,7 @@ partial class MainForm
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             BackColor = Theme.HeaderGreen,
-            Padding = new Padding(0, 11, 16, 0),
+            Padding = new Padding(0, 18, 16, 0),
         };
         btnConfig.Text = "⚙  Configuration";
         btnConfig.Font = Theme.BoldFont;
@@ -174,7 +174,7 @@ partial class MainForm
         lblStation.Font = Theme.NormalFont;
         lblStation.ForeColor = Theme.HeaderText;
         lblStation.AutoSize = true;
-        lblStation.Margin = new Padding(14, 8, 8, 0);
+        lblStation.Margin = new Padding(14, 16, 8, 0);
         lblModeBadge.Text = "  MANUAL  ";
         lblModeBadge.Font = Theme.BoldFont;
         lblModeBadge.ForeColor = Color.FromArgb(70, 45, 0);
@@ -182,7 +182,7 @@ partial class MainForm
         lblModeBadge.AutoSize = false;
         lblModeBadge.Size = new Size(84, 24);
         lblModeBadge.TextAlign = ContentAlignment.MiddleCenter;
-        lblModeBadge.Margin = new Padding(12, 5, 6, 0);
+        lblModeBadge.Margin = new Padding(12, 13, 6, 0);
         // Light/dark toggle (shows a moon in light mode, a sun in dark mode).
         btnTheme.Text = Theme.Dark ? "☀" : "🌙";
         btnTheme.Font = new Font("Segoe UI", 12F);
