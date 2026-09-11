@@ -92,7 +92,13 @@ public sealed class SettingsForm : Form
     // hiding the credential rows removes the gap instead of leaving empty space.
     private void RelayoutBody()
     {
+        // Positions must be set in the un-scrolled frame, otherwise setting Top
+        // while the panel is scrolled drifts and adds space on each toggle. So
+        // scroll to the top, lay out, then restore the scroll position.
+        int scroll = -_body.AutoScrollPosition.Y;
         _body.SuspendLayout();
+        _body.AutoScrollPosition = new Point(0, 0);
+
         int y = _firstRowTop;
         foreach (RowSlot row in _rows)
         {
@@ -106,7 +112,9 @@ public sealed class SettingsForm : Form
             }
             y += row.Height;
         }
+
         _body.ResumeLayout();
+        _body.AutoScrollPosition = new Point(0, scroll);
     }
 
     private void BuildUi()
@@ -189,29 +197,45 @@ public sealed class SettingsForm : Form
 
         // --- Bottom button bar ---
         var bar = new Panel { Dock = DockStyle.Bottom, Height = 56, BackColor = Theme.SurfaceAlt };
-        _editButton = BarButton("Edit", Theme.Accent, 16);
+
+        // Left buttons flow left-to-right, so hiding one (e.g. Save) closes the gap.
+        var leftButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Left,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = Theme.SurfaceAlt,
+            Padding = new Padding(12, 11, 0, 0),
+        };
+        _editButton = BarButton("Edit", Theme.Accent);
         _editButton.Click += (_, _) => BeginEdit();
-        _saveButton = BarButton("Save", Theme.Pass, 120);
+        _saveButton = BarButton("Save", Theme.Pass);
         _saveButton.Click += (_, _) => SaveChanges();
-        var closeButton = BarButton("Close", Theme.Idle, 224);
+        var closeButton = BarButton("Close", Theme.Idle);
         closeButton.ForeColor = Theme.Text; // dark text on the light Close button
         closeButton.Click += (_, _) => Close();
-        // "Change password…" sits on the right and is only usable while editing.
-        _changeAdminButton = BarButton("Change password…", Theme.Panel, ClientSize.Width - 190);
+        leftButtons.Controls.Add(_editButton);
+        leftButtons.Controls.Add(_saveButton);
+        leftButtons.Controls.Add(closeButton);
+
+        // "Change password…" sits on the right and is only shown while editing.
+        _changeAdminButton = BarButton("Change password…", Theme.Panel);
         _changeAdminButton.Width = 174;
         _changeAdminButton.ForeColor = Theme.Accent;
         _changeAdminButton.FlatAppearance.BorderColor = Theme.Border;
         _changeAdminButton.FlatAppearance.BorderSize = 1;
+        _changeAdminButton.Location = new Point(ClientSize.Width - 190, 11);
         _changeAdminButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _changeAdminButton.Click += (_, _) => ChangeAdminPassword();
         _editable.Add(_changeAdminButton);
+
         foreach (Button b in new[] { _editButton, _saveButton, closeButton, _changeAdminButton })
         {
             AddClickFeedback(b);
         }
-        bar.Controls.Add(_editButton);
-        bar.Controls.Add(_saveButton);
-        bar.Controls.Add(closeButton);
+        bar.Controls.Add(leftButtons);
         bar.Controls.Add(_changeAdminButton);
         Controls.Add(bar);
     }
@@ -373,13 +397,13 @@ public sealed class SettingsForm : Form
         (int)(a.G + (b.G - a.G) * t),
         (int)(a.B + (b.B - a.B) * t));
 
-    private Button BarButton(string text, Color colour, int x)
+    private static Button BarButton(string text, Color colour)
     {
         var button = new Button
         {
             Text = text,
-            Location = new Point(x, 11),
             Size = new Size(96, 34),
+            Margin = new Padding(0, 0, 8, 0), // gap between flowed buttons
             BackColor = colour,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
