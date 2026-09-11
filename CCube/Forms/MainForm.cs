@@ -587,20 +587,6 @@ public partial class MainForm : Form
         }
     }
 
-    // Barcodes are letters, digits and a few separators - block spaces/symbols.
-    private void txtManual_KeyPress(object? sender, KeyPressEventArgs e)
-    {
-        if (char.IsControl(e.KeyChar))
-        {
-            return; // allow Backspace, Enter, etc.
-        }
-        bool allowed = char.IsLetterOrDigit(e.KeyChar) || e.KeyChar is '-' or '_' or '.';
-        if (!allowed)
-        {
-            e.Handled = true;
-        }
-    }
-
     private async void DoManualScan()
     {
         string barcode = txtManual.Text.Trim();

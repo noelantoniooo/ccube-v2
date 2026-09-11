@@ -335,7 +335,6 @@ partial class MainForm
         txtManual.MaxLength = Plc.Db100Layout.BarcodeMaxLength; // 40 - same as the PLC field
         txtManual.PlaceholderText = "Type or scan a barcode, then press Enter";
         txtManual.KeyDown += txtManual_KeyDown;
-        txtManual.KeyPress += txtManual_KeyPress; // barcode characters only
         btnScan.Text = "Scan";
         btnScan.Font = Theme.BoldFont;
         btnScan.ForeColor = Color.White;
