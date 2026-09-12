@@ -234,6 +234,9 @@ public partial class MainForm : Form
             BackColor = Theme.Surface,
             BorderStyle = BorderStyle.FixedSingle,
             Margin = new Padding(0, 0, 0, 8),
+            // Inner padding keeps the number and caption off the frame so the
+            // text isn't cramped against the border.
+            Padding = new Padding(0, 8, 0, 10),
             Cursor = Cursors.Hand,
         };
         var number = new Label
