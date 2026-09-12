@@ -38,7 +38,7 @@ partial class MainForm
     private Label lblVerdictDetail = null!;
     // Main
     private SplitContainer splitBody = null!;
-    private SplitContainer splitMain = null!;
+    private Panel pnlCounters = null!;
     private Panel pnlLogs = null!;
     private Label lblLogsHeader = null!;
     private ListView lvScans = null!;
@@ -47,7 +47,6 @@ partial class MainForm
     private ColumnHeader colVerdict = null!;
     private ColumnHeader colReason = null!;
     private ColumnHeader colMs = null!;
-    private Panel pnlSide = null!;
     // Event logs
     private Panel pnlEvents = null!;
     private Label lblEventsHeader = null!;
@@ -87,7 +86,7 @@ partial class MainForm
         lblVerdict = new Label();
         lblVerdictDetail = new Label();
         splitBody = new SplitContainer();
-        splitMain = new SplitContainer();
+        pnlCounters = new Panel();
         pnlLogs = new Panel();
         lblLogsHeader = new Label();
         lvScans = new ListView();
@@ -96,7 +95,6 @@ partial class MainForm
         colVerdict = new ColumnHeader();
         colReason = new ColumnHeader();
         colMs = new ColumnHeader();
-        pnlSide = new Panel();
         pnlEvents = new Panel();
         lblEventsHeader = new Label();
         lvEvents = new ListView();
@@ -227,16 +225,11 @@ partial class MainForm
         pnlVerdict.Controls.Add(lblVerdict);
         pnlVerdict.Controls.Add(lblVerdictDetail);
 
-        // --- Main: Case Logs (left) + the right column, split by a draggable bar ---
-        splitMain.Dock = DockStyle.Fill;
-        splitMain.Orientation = Orientation.Vertical;
-        splitMain.FixedPanel = FixedPanel.Panel2;   // keep the right column width on resize
-        splitMain.SplitterWidth = 6;
-        splitMain.BackColor = Theme.Border;          // makes the splitter bar visible
-        splitMain.Panel1.BackColor = Theme.Background;
-        splitMain.Panel1.Padding = new Padding(14, 10, 6, 6);
-        splitMain.Panel2.BackColor = Theme.Background;
-        splitMain.Panel2.Padding = new Padding(6, 10, 14, 6);
+        // --- Main: counters (left, stacked) + Case Logs. Tiles built in code. ---
+        pnlCounters.Dock = DockStyle.Left;
+        pnlCounters.Width = 168;
+        pnlCounters.BackColor = Theme.Background;
+        pnlCounters.Padding = new Padding(0, 0, 12, 0);
 
         pnlLogs.Dock = DockStyle.Fill;
         pnlLogs.BackColor = Theme.Surface;
@@ -276,11 +269,6 @@ partial class MainForm
         pnlLogs.Controls.Add(lvScans);
         pnlLogs.Controls.Add(lblLogsHeader);
 
-        pnlSide.Dock = DockStyle.Fill;
-        pnlSide.BackColor = Theme.Background;
-
-        splitMain.Panel1.Controls.Add(pnlLogs);
-        splitMain.Panel2.Controls.Add(pnlSide);
 
         // --- Event logs ---
         pnlEvents.Dock = DockStyle.Fill;
@@ -356,7 +344,10 @@ partial class MainForm
         splitBody.FixedPanel = FixedPanel.Panel2;   // keep the Event Logs height on resize
         splitBody.SplitterWidth = 6;
         splitBody.BackColor = Theme.Border;          // makes the splitter bar visible
-        splitBody.Panel1.Controls.Add(splitMain);
+        // Case Logs area: counters dock on the left, the log fills the rest.
+        splitBody.Panel1.Padding = new Padding(14, 10, 14, 6);
+        splitBody.Panel1.Controls.Add(pnlLogs);
+        splitBody.Panel1.Controls.Add(pnlCounters);
         splitBody.Panel2.Controls.Add(pnlEvents);
 
         root.Controls.Add(pnlHeader, 0, 0);

@@ -33,18 +33,19 @@ public partial class MainForm : Form
 
     // Health strip labels.
     private Label _ledPlc = null!, _ledInx = null!, _ledScanner = null!;
-    // Counters + reject-reason breakdown.
+    // Session counter tiles (All / Success / Failed).
     private Label _lblTotal = null!, _lblPass = null!, _lblReject = null!;
-    private readonly Dictionary<ResultCode, Label> _reasonCounts = new();
-    // Rejects-monitoring grid (one row per case-packer, counts by shift).
-    private ListView _lvMonitor = null!;
-    private readonly Dictionary<string, ListViewItem> _monitorRows = new();
+    // Every scan this session, so a counter tile can list its cases on click.
+    private readonly List<ScanRecord> _allScans = new();
+
+    // Which cases a counter tile lists.
+    private enum CaseFilter { All, Pass, Reject }
 
     public MainForm()
     {
         InitializeComponent();
         BuildHealthStrip();
-        BuildSidePanel();
+        BuildCounters();
 
         // Give buttons a subtle hover/press response so clicks feel responsive.
         AddClickFeedback(btnConfig);
@@ -56,7 +57,6 @@ public partial class MainForm : Form
         // which looks wrong in dark mode).
         ThemeListHeaders(lvScans);
         ThemeListHeaders(lvEvents);
-        ThemeListHeaders(_lvMonitor);
     }
 
     private static void ThemeListHeaders(ListView list)
@@ -202,80 +202,110 @@ public partial class MainForm : Form
     }
 
     // -------------------------------------------------------------------------
-    // Side panel (counters + reject reasons)
+    // Counters (All / Success / Failed) - stacked on the left; click to list cases
     // -------------------------------------------------------------------------
 
-    private void BuildSidePanel()
+    private void BuildCounters()
     {
-        // The right column stacks three sections: counters (top), rejects
-        // monitoring (per case-packer, by shift), and the reject-reason totals.
-
-        // --- Reject Reasons (fixed height at the bottom so all six always show) ---
-        var reasonsPanel = new Panel
+        var grid = new TableLayoutPanel
         {
-            Dock = DockStyle.Bottom,
-            Height = 172, // header + all six reason rows, always fully visible
-            BackColor = Theme.Surface,
-            BorderStyle = BorderStyle.FixedSingle,
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = Theme.Background,
         };
-        var reasons = new TableLayoutPanel
+        for (int i = 0; i < 3; i++)
+        {
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 3F));
+        }
+        _lblTotal = MakeCounterTile(grid, 0, "ALL", Theme.Text, CaseFilter.All);
+        _lblPass = MakeCounterTile(grid, 1, "SUCCESS", Theme.Pass, CaseFilter.Pass);
+        _lblReject = MakeCounterTile(grid, 2, "FAILED", Theme.Reject, CaseFilter.Reject);
+        pnlCounters.Controls.Add(grid);
+    }
+
+    // One clickable counter tile: a big number over a caption. Clicking it pops up
+    // the cases in that category.
+    private Label MakeCounterTile(TableLayoutPanel grid, int row, string caption, Color colour, CaseFilter filter)
+    {
+        var tile = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Theme.Surface,
-            ColumnCount = 2,
-            Padding = new Padding(4, 2, 4, 4),
-        };
-        reasons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        reasons.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56F));
-
-        ResultCode[] rejectReasons =
-        {
-            ResultCode.NotValid, ResultCode.ScannerNoRead, ResultCode.BadBarcode,
-            ResultCode.Timeout, ResultCode.Error, ResultCode.NotReady,
-        };
-        reasons.RowCount = rejectReasons.Length + 1;
-        for (int r = 0; r < rejectReasons.Length; r++)
-        {
-            reasons.RowStyles.Add(new RowStyle(SizeType.Absolute, 23F));
-        }
-        reasons.RowStyles.Add(new RowStyle(SizeType.Percent, 100F)); // filler
-
-        for (int row = 0; row < rejectReasons.Length; row++)
-        {
-            ResultCode code = rejectReasons[row];
-            var name = new Label
-            {
-                Text = ReasonText(code),
-                Font = Theme.NormalFont,
-                ForeColor = Theme.Text,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 0, 0, 0),
-            };
-            var count = new Label
-            {
-                Text = "0",
-                Font = Theme.BoldFont,
-                ForeColor = Theme.Muted,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleRight,
-                Padding = new Padding(0, 0, 10, 0),
-            };
-            reasons.Controls.Add(name, 0, row);
-            reasons.Controls.Add(count, 1, row);
-            _reasonCounts[code] = count;
-        }
-        reasonsPanel.Controls.Add(reasons);
-        reasonsPanel.Controls.Add(SideHeader("REJECT REASONS"));
-
-        // --- Rejects Monitoring (per case-packer, counts by shift; scrolls inside) ---
-        var monitorPanel = new Panel
-        {
-            Dock = DockStyle.Fill, // takes the leftover space (scrolls inside if many packers)
-            BackColor = Theme.Surface,
             BorderStyle = BorderStyle.FixedSingle,
+            Margin = new Padding(0, 0, 0, 8),
+            Cursor = Cursors.Hand,
         };
-        _lvMonitor = new ListView
+        var number = new Label
+        {
+            Text = "0",
+            Font = Theme.CounterFont,
+            ForeColor = colour,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Cursor = Cursors.Hand,
+        };
+        var cap = new Label
+        {
+            Text = caption,
+            Font = Theme.BoldFont,
+            ForeColor = Theme.Muted,
+            Dock = DockStyle.Bottom,
+            Height = 22,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Cursor = Cursors.Hand,
+        };
+        tile.Controls.Add(number);
+        tile.Controls.Add(cap);
+
+        void Open(object? s, EventArgs e) => ShowCases(filter);
+        tile.Click += Open;
+        number.Click += Open;
+        cap.Click += Open;
+
+        // Highlight on hover; clear only when the mouse leaves the whole tile so it
+        // doesn't flicker while moving between the number and caption labels.
+        void HoverOn(object? s, EventArgs e) => tile.BackColor = Theme.SurfaceAlt;
+        tile.MouseEnter += HoverOn;
+        number.MouseEnter += HoverOn;
+        cap.MouseEnter += HoverOn;
+        tile.MouseLeave += (_, _) => tile.BackColor = Theme.Surface;
+
+        grid.Controls.Add(tile, 0, row);
+        return number;
+    }
+
+    // Pops up the list of cases behind a counter tile.
+    private void ShowCases(CaseFilter filter)
+    {
+        List<ScanRecord> cases = filter switch
+        {
+            CaseFilter.Pass => _allScans.Where(s => s.IsPass).ToList(),
+            CaseFilter.Reject => _allScans.Where(s => !s.IsPass).ToList(),
+            _ => _allScans.ToList(),
+        };
+        cases.Reverse(); // newest first
+
+        string title = filter switch
+        {
+            CaseFilter.Pass => "Passed cases",
+            CaseFilter.Reject => "Failed cases",
+            _ => "All cases",
+        } + $"  ({cases.Count})";
+
+        using var dialog = new Form
+        {
+            Text = title,
+            StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(780, 480),
+            BackColor = Theme.Background,
+            ForeColor = Theme.Text,
+            Font = Theme.NormalFont,
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ShowIcon = false,
+        };
+        var list = new ListView
         {
             Dock = DockStyle.Fill,
             View = View.Details,
@@ -286,115 +316,43 @@ public partial class MainForm : Form
             BorderStyle = BorderStyle.None,
             HeaderStyle = ColumnHeaderStyle.Nonclickable,
         };
-        _lvMonitor.Columns.Add("Packer", 66);
-        _lvMonitor.Columns.Add("1st", 54, HorizontalAlignment.Right);
-        _lvMonitor.Columns.Add("2nd", 54, HorizontalAlignment.Right);
-        _lvMonitor.Columns.Add("3rd", 54, HorizontalAlignment.Right);
-        _lvMonitor.Columns.Add("Total", 62, HorizontalAlignment.Right);
-        monitorPanel.Controls.Add(_lvMonitor);
-        monitorPanel.Controls.Add(SideHeader("REJECTS MONITORING  ·  BY PACKER"));
-
-        // --- Counters (top) ---
-        var counters = new TableLayoutPanel
+        list.Columns.Add("Time", 130);
+        list.Columns.Add("Barcode", 330);
+        list.Columns.Add("Verdict", 90);
+        list.Columns.Add("Reason", 160);
+        list.Columns.Add("ms", 60, HorizontalAlignment.Right);
+        foreach (ScanRecord r in cases)
         {
-            Dock = DockStyle.Top,
-            Height = 74,
-            ColumnCount = 3,
-            RowCount = 1,
-            BackColor = Theme.Background,
-        };
-        for (int i = 0; i < 3; i++)
-        {
-            counters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 3F));
+            var item = new ListViewItem(r.ScannedAtLocal.ToString("HH:mm:ss"));
+            item.SubItems.Add(r.Barcode);
+            item.SubItems.Add(r.Verdict);
+            item.SubItems.Add(ReasonText(r.ResultCode));
+            item.SubItems.Add(r.TotalMs.ToString());
+            item.ForeColor = r.IsPass ? Theme.Pass : Theme.Reject;
+            list.Items.Add(item);
         }
-        _lblTotal = MakeCounterTile(counters, 0, "TOTAL", Theme.Text);
-        _lblPass = MakeCounterTile(counters, 1, "PASS", Theme.Pass);
-        _lblReject = MakeCounterTile(counters, 2, "REJECT", Theme.Reject);
+        ThemeListHeaders(list);
 
-        // Add the Fill section first, then Bottom, then Top, so the stack is
-        // counters (top) → monitoring (fills the middle) → reasons (bottom).
-        pnlSide.Controls.Add(monitorPanel);
-        pnlSide.Controls.Add(reasonsPanel);
-        pnlSide.Controls.Add(counters);
-    }
-
-    private static Label SideHeader(string text) => new()
-    {
-        Text = text,
-        Font = Theme.SectionFont,
-        ForeColor = Theme.Accent,
-        Dock = DockStyle.Top,
-        Height = 22,
-        TextAlign = ContentAlignment.MiddleLeft,
-        Padding = new Padding(8, 0, 0, 0),
-        BackColor = Theme.SurfaceAlt,
-    };
-
-    // 3-shift plant clock: 1st 06:00-14:00, 2nd 14:00-22:00, 3rd 22:00-06:00.
-    private static int ShiftIndex(DateTime when) => when.Hour switch
-    {
-        >= 6 and < 14 => 0,
-        >= 14 and < 22 => 1,
-        _ => 2,
-    };
-
-    private void UpdateMonitor(ScanRecord record)
-    {
-        string packer = BarcodeFields.CasePackerId(record.Barcode);
-        int shift = ShiftIndex(record.ScannedAtLocal);
-
-        if (!_monitorRows.TryGetValue(packer, out ListViewItem? row))
+        var bar = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = Theme.SurfaceAlt };
+        var close = new Button
         {
-            row = new ListViewItem(packer);
-            row.SubItems.Add("0"); // 1st
-            row.SubItems.Add("0"); // 2nd
-            row.SubItems.Add("0"); // 3rd
-            row.SubItems.Add("0"); // total
-            _lvMonitor.Items.Add(row);
-            _monitorRows[packer] = row;
-        }
-        row.SubItems[shift + 1].Text = (int.Parse(row.SubItems[shift + 1].Text) + 1).ToString();
-        row.SubItems[4].Text = (int.Parse(row.SubItems[4].Text) + 1).ToString();
-    }
-
-    private static Label MakeCounterTile(TableLayoutPanel grid, int col, string caption, Color colour)
-    {
-        var tile = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Theme.Surface,
-            BorderStyle = BorderStyle.FixedSingle,
-            Margin = TileMargin(col),
+            Text = "Close",
+            Size = new Size(90, 32),
+            Location = new Point(dialog.ClientSize.Width - 104, 8),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            BackColor = Theme.Idle,
+            ForeColor = Theme.Text,
+            FlatStyle = FlatStyle.Flat,
         };
-        var number = new Label
-        {
-            Text = "0",
-            Font = Theme.CounterFont,
-            ForeColor = colour,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-        };
-        var cap = new Label
-        {
-            Text = caption,
-            Font = Theme.SmallFont,
-            ForeColor = Theme.Muted,
-            Dock = DockStyle.Bottom,
-            Height = 18,
-            TextAlign = ContentAlignment.MiddleCenter,
-        };
-        tile.Controls.Add(number);
-        tile.Controls.Add(cap);
-        grid.Controls.Add(tile, col, 0);
-        return number;
-    }
+        close.FlatAppearance.BorderSize = 0;
+        close.Click += (_, _) => dialog.Close();
+        bar.Controls.Add(close);
 
-    private static Padding TileMargin(int col) => col switch
-    {
-        0 => new Padding(0, 4, 4, 4),
-        2 => new Padding(4, 4, 0, 4),
-        _ => new Padding(4, 4, 4, 4),
-    };
+        dialog.Controls.Add(list);
+        dialog.Controls.Add(bar);
+        dialog.AcceptButton = close;
+        dialog.ShowDialog(this);
+    }
 
     // -------------------------------------------------------------------------
     // Engine + log events (arrive on background threads)
@@ -425,6 +383,13 @@ public partial class MainForm : Form
             detail += "    •    " + ReasonText(record.ResultCode);
             lblVerdictDetail.Text = detail;
 
+            // Keep the record so a counter tile can list its cases (cap the memory).
+            _allScans.Add(record);
+            if (_allScans.Count > 5000)
+            {
+                _allScans.RemoveAt(0);
+            }
+
             _total++;
             if (record.IsPass)
             {
@@ -433,12 +398,6 @@ public partial class MainForm : Form
             else
             {
                 _reject++;
-                if (_reasonCounts.TryGetValue(record.ResultCode, out Label? counter))
-                {
-                    counter.Text = (int.Parse(counter.Text) + 1).ToString();
-                    counter.ForeColor = Theme.Reject;
-                }
-                UpdateMonitor(record); // per-case-packer / shift breakdown
             }
             _lblTotal.Text = _total.ToString();
             _lblPass.Text = _pass.ToString();
@@ -500,8 +459,6 @@ public partial class MainForm : Form
     {
         // Event Logs height (horizontal split below Case Logs); Panel2 = Event Logs.
         SizeSplitter(splitBody, size: splitBody.Height, desiredPanel2: 150, panel1Min: 200, panel2Min: 64);
-        // Right-column width (vertical split beside Case Logs); Panel2 = right column.
-        SizeSplitter(splitMain, size: splitMain.Width, desiredPanel2: 366, panel1Min: 380, panel2Min: 260);
     }
 
     // Sets a splitter to leave 'desiredPanel2' for Panel2, then tightens the min
