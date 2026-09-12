@@ -138,6 +138,152 @@ don't freeze the screen" tools.**
 
 ---
 
+## 0b. C# fundamentals, part 2 — data and logic
+
+§0 covered the keyword/symbol *decorations*. This part covers the actual
+building blocks you use to hold data and make decisions — arrays, lists, loops,
+`if`/`switch`, LINQ, tuples, error handling. Every snippet below is real code from
+this project.
+
+### Basic data types (the "kinds of value")
+
+```csharp
+string barcode = "CASE-1001";       // text
+int    totalMs = 42;                // whole number
+short  seqNo   = 5;                 // smaller whole number (the PLC uses these)
+bool   isValid = true;              // true / false
+byte   b       = 255;               // a single 0–255 value (PLC bytes)
+double x       = 1.5;               // decimal number
+DateTime when  = DateTime.UtcNow;   // a moment in time
+```
+
+- **`var`** = "compiler, infer the type from the right-hand side."
+  `var grid = new TableLayoutPanel();` — still strongly typed, just less repetition.
+- **`byte[]`** (array of bytes) — the PLC data block is exactly this: one raw buffer
+  that `Db100Frame` reads fields out of.
+
+### Arrays vs. Lists — the two "many things" containers
+
+```csharp
+byte[] buffer = new byte[58];            // ARRAY — FIXED size (58 slots), [index] access
+List<ScanRecord> _allScans = new();      // LIST  — grows/shrinks as you add/remove
+```
+
+- **Array `T[]`** — fixed length, fastest, accessed by position (`buffer[0]`). Used
+  for the PLC byte buffer.
+- **`List<T>`** — resizable. `T` is the type inside, so `List<ScanRecord>` is "a list
+  of scan records." Methods: `.Add(x)`, `.Remove(x)`, `.Count`, index `list[0]`.
+  This holds the in-memory scan history (`_allScans`).
+- **`Dictionary<TKey,TValue>`** — a key→value lookup table (like a PHP associative
+  array). Not heavy in this project yet, but you'll meet it.
+
+### Loops — do something repeatedly
+
+```csharp
+for (int i = 0; i < 3; i++) { ... }              // counted loop — builds 3 counter rows
+foreach (var scan in _allScans) { ... }          // "for each item" — no counter needed
+while (_running) { Tick(); Thread.Sleep(200); }  // repeat until a condition ends
+```
+
+- **`for`** — when you need the counter `i`.
+- **`foreach`** — when you just want each item; the cleaner, more common one.
+- **`while`** — repeat while something stays true. This *is* the scan loop.
+
+### `if` / `switch` — making decisions
+
+```csharp
+if (scannerNoRead) return ResultCode.ScannerNoRead;   // plain branch
+
+// switch EXPRESSION — chooses a VALUE based on a match (from ShowCases):
+List<ScanRecord> cases = filter switch
+{
+    CaseFilter.Pass   => _allScans.Where(s => s.IsPass).ToList(),
+    CaseFilter.Reject => _allScans.Where(s => !s.IsPass).ToList(),
+    _                 => _allScans.ToList(),   // _ = "anything else" (default)
+};
+```
+
+The `switch` *expression* (with `=>`) compactly maps an input to a returned value;
+`_` is the catch-all default.
+
+### LINQ — query a list in one line (very common here)
+
+LINQ filters/transforms collections fluently instead of a manual `foreach`+`if`+`Add`:
+
+```csharp
+_allScans.Where(s => s.IsPass).ToList();   // keep only passes, then make a List
+_allScans.Count(s => !s.IsPass);           // how many rejects
+cases.Reverse();                           // newest first
+```
+
+`s => s.IsPass` is a lambda: "given a scan `s`, is it a pass?" Reads like English:
+*from all scans, where it's a pass, to a list.*
+
+### Tuples — return several values at once
+
+```csharp
+private (ResultCode code, CaseResult? info, int inExpressMs) DecideVerdict(...)
+// caller unpacks all three in one line:
+(ResultCode code, CaseResult? info, int inExpressMs) = DecideVerdict(...);
+```
+
+The parenthesised return type is a **tuple** — several named values bundled together
+so one method can hand back the verdict, the details, and the timing in one return.
+
+### Error handling — the safety net that enforces "silence is never a PASS"
+
+```csharp
+try
+{
+    CaseResult info = _validator.Validate(barcode);   // risky: a DB call
+}
+catch (SqlException ex) when (ex.Number == -2)         // specific: SQL timeout
+{
+    return (ResultCode.Timeout, null, ms);
+}
+catch (Exception ex)                                   // anything else
+{
+    return (ResultCode.Error, null, ms);
+}
+```
+
+- **`try`** — attempt something that might fail.
+- **`catch`** — handle a failure instead of crashing; catch a *specific* exception
+  type or the general `Exception`.
+- **`when (...)`** — extra filter on a catch (here: only SQL timeouts).
+- **`throw`** — deliberately raise an error for a caller to handle.
+
+Every risky step in the app is wrapped like this so a failure becomes a safe REJECT.
+
+### Handy string helpers you'll keep seeing
+
+```csharp
+barcode.Trim();                         // strip leading/trailing spaces
+string.IsNullOrWhiteSpace(procName);    // "empty or just spaces?"
+code.ToString();                        // enum/number → text
+$"seq {seqNo}";                         // interpolation — drop a value into text
+```
+
+### Properties — fields with a gate
+
+```csharp
+public bool IsPass => ResultCode.IsPass();     // computed, read-only property
+public string StationId { get; init; } = "";   // auto-property, set once at creation
+```
+
+A **property** looks like a field from outside but can run logic. `get` = readable,
+`set`/`init` = writable (`init` means "only when the object is first created").
+`IsPass` stores nothing — it's recomputed from the result code each time you read it.
+
+### One-line recap
+
+Hold data in a **`List<T>`** (or a fixed **`T[]`** for the PLC bytes), walk it with
+**`foreach`**, decide with **`if`/`switch`**, filter it with **LINQ `.Where/.Count`**,
+return several values with a **tuple**, and wrap anything risky in **`try/catch`** so
+a failure turns into a REJECT instead of a crash.
+
+---
+
 ## 1. The 60-second mental model
 
 C-Cube is a referee standing next to a conveyor. A box (a "case") arrives, a
