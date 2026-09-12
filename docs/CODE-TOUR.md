@@ -4,6 +4,8 @@ A plain-English walkthrough of the codebase for whoever maintains it (that's you
 Read this once end-to-end, then keep it open as a map when you need to change or
 debug something. It answers three questions:
 
+0. **The C# fundamentals** you keep seeing in this project (§0 — read first if
+   you're new to C#).
 1. **What does each file do**, in layman's terms?
 2. **How do the files connect** to each other?
 3. **When we switch from the local test databases to the real plant databases,
@@ -12,6 +14,127 @@ debug something. It answers three questions:
 
 > New here? Also read `HOW-TO-BUILD-RUN-DEBUG.md` (how to compile/run) and
 > `DESIGN.md` (the big-picture spec). This file is the "tour of the rooms".
+
+---
+
+## 0. C# fundamentals you'll see all over this project
+
+If you come from PHP/JavaScript, this section decodes the keywords and symbols that
+appear on almost every line. You don't need to memorise them — skim once, then come
+back when a symbol puzzles you.
+
+### Method (function) shape — the thing you already spotted
+
+In C# the **return type comes first**, then the name, then the parameters. There's
+no `function` keyword.
+
+```csharp
+private ResultCode DecideVerdict(string barcode)
+//  │       │           │            └─ parameters (type name, like `string barcode`)
+//  │       │           └─ method name
+//  │       └─ RETURN TYPE — what the method hands back
+//  └─ access — who is allowed to call it
+```
+
+PHP writes `public function decide($barcode): ResultCode`. C# just moves the return
+type to the front. `void` as the return type means "returns nothing".
+
+### Access keywords — who can see/call this
+
+| Keyword | Means |
+|---|---|
+| `public` | Anyone, any file, even outside the project. |
+| `private` | Only inside *this same class*. Most fields/methods are private. |
+| `internal` | Anywhere in *this project*, but not outside it. |
+| `protected` | This class + classes that inherit from it (rare here — we use `sealed`). |
+
+### The keywords that decorate classes, fields and methods
+
+- **`sealed`** — "nobody can inherit from this class." `public sealed class ScanEngine`
+  means you can't make a `class MyScanEngine : ScanEngine`. Read it as **"final,
+  use as-is."** It's a clarity/safety signal (and a tiny speed win). Harmless to you.
+- **`static`** — belongs to the *class itself*, not to an object you `new` up. That's
+  why `AppLog.Info(...)` works with no `new AppLog()` — you call it
+  `ClassName.Method()`. `Program.Main` is static because the app needs an entry
+  point before any object exists.
+- **`readonly`** — assigned once (in the constructor) then frozen. `private readonly
+  IPlcLink _plc;` guarantees `_plc` never gets swapped out later.
+- **`const`** — a fixed value baked in at compile time, e.g. `private const string
+  InsertSql = "...";`.
+- **`void`** — return type meaning "hands nothing back" (`public void Start()`).
+- **`volatile`** — "this field is touched by more than one thread, always read the
+  freshest value." You see it on `_running` because the background loop and the UI
+  both read it.
+
+### Symbols that trip people up
+
+- **`_underscore` names** (`_plc`, `_running`) — just a **naming convention** for a
+  private field of the class (not a keyword). It visually separates fields from
+  local variables and parameters.
+- **`?` after a type** — "this can be **null** (missing/empty)." `string? ProductName`
+  may be null; plain `string` is expected to always have a value.
+- **`?.` (null-safe dot)** — `info?.ProductName`: if `info` is null, the whole
+  expression is null instead of crashing. Pairs with `??` ("use this if null"):
+  `record.ProductName ?? DBNull.Value`.
+- **`=>` has two uses:**
+  - a **lambda** (a mini inline function): `() => _history.Save(record)` = "a
+    function that takes no args and saves the record."
+  - an **expression body** (one-line method): `public void Dispose() => Stop();` is
+    just a short way to write a method whose whole body is one line.
+- **`new`** — build an instance by running its constructor: `new ScanEngine(...)`.
+- **`using var x = ...`** — **auto-cleanup**. `using var connection = new
+  SqlConnection(...)` automatically closes/disposes the connection when the block
+  ends, even if an error is thrown. Prevents leaked DB connections.
+- **`$"...{value}..."`** — string interpolation (like PHP double-quoted strings):
+  `$"seq {inputs.SeqNo}"` drops the value straight in. `@"..."` is a raw string
+  (backslashes and line breaks kept literally) — used for the multi-line SQL.
+
+### The building blocks that make the app modular
+
+- **`interface` and the `I` prefix** — a **contract**: method names with no bodies.
+  `IPlcLink` says "any PLC link must have `ReadInputs()`, `WriteOutputs()`…". A real
+  class *fulfils* it: `class S7PlcLink : IPlcLink`. The `:` means "implements" (or
+  "inherits"). This is the trick that lets `ScanEngine` talk to *any* PLC link
+  without knowing which one — it only depends on the interface.
+- **`record`** — a lightweight class for holding data (like `ScanRecord`,
+  `CaseResult`). C# writes the boilerplate (constructor, equality) for you. Think
+  "a data sheet."
+- **`enum`** — a fixed set of named options. `ResultCode` (Ok, NotValid, Timeout…)
+  is an enum, so the compiler stops you inventing a verdict that doesn't exist.
+- **`event` + `+=`** — a **broadcast** others subscribe to. `ScanEngine` *raises*
+  `ScanCompleted`; `MainForm` *subscribes* with `_engine.ScanCompleted +=
+  OnScanCompleted` ("when a scan finishes, run my method"). Publish/subscribe — it's
+  how the background engine tells the screen to update without knowing about the
+  screen.
+
+### Threads and "async" (why the conveyor never freezes)
+
+- **`Task.Run(() => ...)`** — "do this on a **background thread**, don't wait for
+  it." History-saving uses this so a slow database can't delay the next case.
+- **`async` / `await` / `Task`** — the general pattern for "start slow work, let the
+  app stay responsive, continue when it's done." You'll see `async` methods return
+  a `Task`.
+- **`BeginInvoke(...)`** — "run this **on the UI thread**." The scan engine runs on
+  a background thread and is *not allowed* to touch screen controls directly, so it
+  hops back onto the UI thread through `BeginInvoke` to update labels/lists.
+
+### Predefined C# / WinForms calls you'll see (and can mostly leave alone)
+
+| Call | What it does |
+|---|---|
+| `InitializeComponent()` | Auto-generated in `*.Designer.cs`. Creates every button/label/panel and sets positions, sizes, colours. The visual designer writes it; you rarely hand-edit it. Called once in the form's constructor to "build the window." |
+| `ApplicationConfiguration.Initialize()` | Turns on modern visual styles + high-DPI so the UI looks crisp (in `Program.cs`). |
+| `Application.Run(new MainForm())` | Starts the WinForms **message loop** — keeps the window alive and listening for clicks until it closes. |
+| `MessageBox.Show(...)` | The little popup dialog box. |
+| `Mutex(...)` | A machine-wide flag; we use it so only one copy of C-Cube can run at once. |
+| `Environment.TickCount64` | A millisecond clock we use to measure "how long did this take" and heartbeat timing. |
+| `Thread.Sleep(200)` | Pause this thread 200 ms — the scan loop's pacing. |
+| `Dock` / `Anchor` / `Padding` / `Margin` | WinForms layout: `Dock` glues a control to a side (or fills), `Anchor` keeps edges a fixed distance as the window resizes, `Padding` is space *inside* a control, `Margin` is space *around* it. |
+
+If you remember nothing else: **return type first, `I`-prefix means a contract,
+`sealed` means final, `_name` is a private field, `=>` is a mini-function or a
+one-line method, and `Task.Run`/`BeginInvoke` are the "don't freeze the conveyor /
+don't freeze the screen" tools.**
 
 ---
 
