@@ -1,52 +1,106 @@
 /* ============================================================================
    02-inexpress-validate.sql
    ----------------------------------------------------------------------------
-   REFERENCE STUB of the InExpress validation stored procedure.
+   DUMMY InExpress simulation for local development/testing (database: InExpress2).
 
-   >>> This is a PLACEHOLDER. PMI owns the real logic. <<<
-   The boss's instruction: the app passes ONLY the barcode; the procedure does
-   all the work (aggregation / compliance checks) and returns a simple answer.
+   >>> This whole script is a PLACEHOLDER. PMI owns the real InExpress. <<<
+   The boss's instruction: the C-Cube app passes ONLY the barcode; InExpress does
+   all the work and returns a small, fixed answer.
 
-   The CONTRACT the C-Cube app depends on (keep this stable):
+   The CONTRACT the C-Cube app depends on (keep this stable - this is what PMI
+   must match):
+
        EXEC dbo.usp_ValidateCase @Barcode = '<the case barcode>';
-   must return exactly ONE row with:
-       IsValid      BIT           1 = valid (PASS), 0 = invalid (REJECT)   [required]
-       ProductName  NVARCHAR      optional, for display + history
-       BatchNo      NVARCHAR      optional, for display + history
-       Reason       NVARCHAR      optional, human-readable explanation
 
-   The body below is only so the app can be demonstrated end-to-end against a
-   test database. Replace the marked section with the real logic.
+   must return exactly ONE row with these columns:
+       Id                 INT           the InExpress row id for this case   [nullable]
+       ProductDescription NVARCHAR      product description (for display + history)
+       FaCode             NVARCHAR      FA code             (for display + history)
+       IsValid            BIT           1 = valid (PASS), 0 = invalid (REJECT) [required]
 
-   HOW TO RUN: connect to the InExpress (or a test) database and run this script.
+   Anything else (a missing row, an error, a timeout) makes the app REJECT the
+   case - silence is never a PASS. Column names are matched case-insensitively.
+
+   HOW TO RUN: connect to the InExpress2 test database and run this whole script.
+   It (1) removes leftover objects from earlier experiments, (2) creates a small
+   seeded dbo.CaseData table so scans return realistic data, and (3) creates the
+   dummy usp_ValidateCase that looks a barcode up in that table.
    ============================================================================ */
 
 SET NOCOUNT ON;
 GO
 
+/* ---- 1. Remove leftover objects from earlier compliance-cache experiments --- */
+IF OBJECT_ID('FS.GetLastShippingCaseComplianceStatuses', 'P') IS NOT NULL
+    DROP PROCEDURE FS.GetLastShippingCaseComplianceStatuses;
+IF OBJECT_ID('intobj.ConsolidatedHierarchies', 'U') IS NOT NULL
+    DROP TABLE intobj.ConsolidatedHierarchies;
+IF OBJECT_ID('intobj.ConsolidatedHierarchiesArchive', 'U') IS NOT NULL
+    DROP TABLE intobj.ConsolidatedHierarchiesArchive;
+GO
+
+/* ---- 2. The dummy "known cases" table -------------------------------------- */
+IF OBJECT_ID('dbo.CaseData', 'U') IS NOT NULL
+    DROP TABLE dbo.CaseData;
+GO
+
+CREATE TABLE dbo.CaseData
+(
+    Id                 INT IDENTITY(1001,1) NOT NULL
+        CONSTRAINT PK_CaseData PRIMARY KEY,
+    Barcode            NVARCHAR(50)  NOT NULL
+        CONSTRAINT UQ_CaseData_Barcode UNIQUE,
+    ProductDescription NVARCHAR(100) NOT NULL,
+    FaCode             NVARCHAR(30)  NOT NULL,
+    IsValid            BIT           NOT NULL
+);
+GO
+
+/* Seeded 40-character barcodes. The field positions match v1's CBL layout so the
+   app's client-side parse produces sensible values:
+       chars 23-24 = year (yy), 25-26 = month, 27-28 = day
+       chars 33-34 = case-packer (machine) number
+       chars 35-36 = hour, 37-38 = minute, 39-40 = second
+   e.g. '...250921...07 1430 05' -> CP 07, produced 2025-09-21 14:30:05.          */
+INSERT INTO dbo.CaseData (Barcode, ProductDescription, FaCode, IsValid) VALUES
+    ('0110461200000001000001250921000007143005', 'Marlboro Red KS 20s',    '10461200', 1),
+    ('0110461200000002000002250921000012150522', 'Marlboro Gold KS 20s',   '10461201', 1),
+    ('0110461200000003000003250920000007221240', 'Philip Morris Blue 20s', '10461202', 1),
+    ('0110461200000004000004250921000012034711', 'Marlboro Red KS 20s',    '10461200', 0),
+    ('0110461200000005000005250921000003093000', 'Fortune Red 20s',        '10461205', 1);
+GO
+
+PRINT 'Created and seeded dbo.CaseData (5 dummy cases).';
+GO
+
+/* ---- 3. The dummy validate proc -------------------------------------------- */
 CREATE OR ALTER PROCEDURE dbo.usp_ValidateCase
     @Barcode NVARCHAR(50)
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    /* ---- BEGIN placeholder logic (PMI to replace) -------------------------
-       Demo behaviour so testing is predictable:
-         - barcode contains 'REJECT' or 'FAIL'  -> invalid
-         - otherwise                            -> valid
-    ------------------------------------------------------------------------ */
-    DECLARE @IsValid BIT = 1;
-    IF @Barcode LIKE '%REJECT%' OR @Barcode LIKE '%FAIL%'
-        SET @IsValid = 0;
+    /* Known barcode -> return its real row. */
+    IF EXISTS (SELECT 1 FROM dbo.CaseData WHERE Barcode = @Barcode)
+    BEGIN
+        SELECT Id, ProductDescription, FaCode, IsValid
+        FROM   dbo.CaseData
+        WHERE  Barcode = @Barcode;
+        RETURN;
+    END
 
+    /* Unknown barcode -> simulate a lookup so ad-hoc/manual scans still show data.
+       Rule: a barcode containing 'REJECT' or 'FAIL' is invalid; anything else is
+       valid. PMI's real proc will simply not return a row (or return IsValid = 0)
+       for a case it doesn't recognise. */
     SELECT
-        @IsValid                                             AS IsValid,
-        'Sample Product'                                     AS ProductName,
-        'BATCH-0001'                                         AS BatchNo,
-        CASE WHEN @IsValid = 1 THEN 'OK' ELSE 'Not valid' END AS Reason;
-    /* ---- END placeholder logic ------------------------------------------- */
+        CAST(NULL AS INT)                                       AS Id,
+        CAST('Simulated Product' AS NVARCHAR(100))              AS ProductDescription,
+        CAST('SIM-0000'          AS NVARCHAR(30))               AS FaCode,
+        CASE WHEN @Barcode LIKE '%REJECT%' OR @Barcode LIKE '%FAIL%'
+             THEN CAST(0 AS BIT) ELSE CAST(1 AS BIT) END        AS IsValid;
 END
 GO
 
-PRINT 'Created/updated dbo.usp_ValidateCase (reference stub).';
+PRINT 'Created/updated dbo.usp_ValidateCase (dummy simulation).';
 GO

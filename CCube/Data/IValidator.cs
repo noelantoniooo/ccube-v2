@@ -1,17 +1,21 @@
 // IValidator.cs
 // -----------------------------------------------------------------------------
-// The contract for asking whether a case is valid. CaseResult is the answer:
-// valid or not, plus optional details the stored proc may return for display
-// and history.
+// The contract for asking whether a case is valid. CaseResult is the answer the
+// InExpress validate proc gives back for one barcode:
+//     Id                 the InExpress row id for the case (null if unknown)
+//     ProductDescription product description, for display + history
+//     FaCode             FA code, for display + history
+//     IsValid            true = PASS, false = REJECT
+// (This matches the SP contract PMI is providing - see database/02-*.sql.)
 // -----------------------------------------------------------------------------
 
 namespace CCube.Data;
 
 public sealed record CaseResult(
     bool IsValid,
-    string? ProductName = null,
-    string? BatchNo = null,
-    string? Reason = null);
+    int? Id = null,
+    string? ProductDescription = null,
+    string? FaCode = null);
 
 public interface IValidator
 {

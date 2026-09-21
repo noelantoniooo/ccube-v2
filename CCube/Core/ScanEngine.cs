@@ -261,8 +261,13 @@ public sealed class ScanEngine : IDisposable
             StationId = _stationId,
             Barcode = barcode,
             ResultCode = code,
-            ProductName = info?.ProductName,
-            BatchNo = info?.BatchNo,
+            // From InExpress (the validate proc):
+            InExpressId = info?.Id,
+            ProductDescription = info?.ProductDescription,
+            FaCode = info?.FaCode,
+            // Parsed from the barcode (display/history only - see BarcodeFields):
+            CasePacker = BarcodeFields.CasePacker(barcode),
+            ProductionAt = BarcodeFields.ProductionDateTime(barcode),
             InExpressMs = inExpressMs,
             TotalMs = totalMs,
         };

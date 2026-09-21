@@ -48,5 +48,12 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
   </ItemGroup>
 
+  <!-- Images shipped next to the .exe (copied into bin on build). The header logo
+       is loaded from here at run time. -->
+  <ItemGroup>
+    <None Include="Assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>

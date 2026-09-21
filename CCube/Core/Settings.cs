@@ -22,6 +22,10 @@ public sealed class AppSettings
     // Dark colour theme (off = light).
     public bool ThemeDark { get; set; }
 
+    // Where the daily CSV history backup is written (a folder per month is created
+    // underneath). Edit in settings.json to point at a shared/plant location.
+    public string HistoryCsvFolder { get; set; } = @"C:\CCube\History";
+
     public InExpressSettings InExpress { get; set; } = new();
     public CCubeSettings CCube { get; set; } = new();
     public PlcSettings Plc { get; set; } = new();

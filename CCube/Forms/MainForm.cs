@@ -25,27 +25,20 @@ public partial class MainForm : Form
     private ScanEngine? _engine;
     private readonly HealthMonitor _health = new();
 
-    private int _total;
-    private int _pass;
-    private int _reject;
     private bool _manualVisible;
     private readonly ToolTip _toolTip = new();
 
     // Health strip labels.
     private Label _ledPlc = null!, _ledInx = null!, _ledScanner = null!;
-    // Session counter tiles (All / Success / Failed).
-    private Label _lblTotal = null!, _lblPass = null!, _lblReject = null!;
-    // Every scan this session, so a counter tile can list its cases on click.
-    private readonly List<ScanRecord> _allScans = new();
-
-    // Which cases a counter tile lists.
-    private enum CaseFilter { All, Pass, Reject }
+    // Product Information panel - the value labels for the last/current scan.
+    private Label _piCasePacker = null!, _piProduct = null!, _piFa = null!, _piProduction = null!;
 
     public MainForm()
     {
         InitializeComponent();
+        LoadLogo();
         BuildHealthStrip();
-        BuildCounters();
+        BuildProductInfo();
 
         // Give buttons a subtle hover/press response so clicks feel responsive.
         AddClickFeedback(btnConfig);
@@ -113,9 +106,16 @@ public partial class MainForm : Form
                 _settings.InExpress.ProcName,
                 _settings.InExpress.TimeoutSeconds);
 
-            IHistorySink history = _settings.CCube.IsConfigured
-                ? new SqlHistoryRepository(_settings.CCube.BuildConnectionString())
-                : new NullHistorySink();
+            // Every scan is saved to TWO places: the CCube database (when configured)
+            // AND a daily CSV backup on disk. The CSV always runs so history survives
+            // a database outage.
+            var sinks = new List<IHistorySink>();
+            if (_settings.CCube.IsConfigured)
+            {
+                sinks.Add(new SqlHistoryRepository(_settings.CCube.BuildConnectionString()));
+            }
+            sinks.Add(new CsvHistoryRepository(_settings.HistoryCsvFolder));
+            IHistorySink history = sinks.Count == 1 ? sinks[0] : new CompositeHistorySink(sinks.ToArray());
 
             _plcLink = new S7PlcLink(_settings.Plc);
 
@@ -144,6 +144,16 @@ public partial class MainForm : Form
 
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
+        // The station must not be closable from the UI. There are no window buttons,
+        // and this blocks Alt+F4 too (CloseReason.UserClosing). The app can still be
+        // ended from Task Manager, and it may restart ITSELF (theme/settings change),
+        // which comes through as ApplicationExitCall - not UserClosing - so it works.
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            return;
+        }
+
         try
         {
             AppLog.Entry -= OnLogEntry;
@@ -202,159 +212,102 @@ public partial class MainForm : Form
     }
 
     // -------------------------------------------------------------------------
-    // Counters (All / Success / Failed) - stacked on the left; click to list cases
+    // Header logo
     // -------------------------------------------------------------------------
 
-    private void BuildCounters()
+    // Load the ML+ Solutions logo shipped next to the .exe (Assets\ml-logo.png).
+    // Loaded via a byte copy so the file isn't left locked; missing/bad file just
+    // leaves the header without a logo (never crashes the screen).
+    private void LoadLogo()
     {
-        var grid = new TableLayoutPanel
+        try
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
-            BackColor = Theme.Background,
-        };
-        for (int i = 0; i < 3; i++)
-        {
-            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 3F));
+            string path = Path.Combine(AppContext.BaseDirectory, "Assets", "ml-logo.png");
+            if (File.Exists(path))
+            {
+                byte[] bytes = File.ReadAllBytes(path);
+                using var ms = new MemoryStream(bytes);
+                pbLogo.Image = new Bitmap(ms);
+            }
         }
-        _lblTotal = MakeCounterTile(grid, 0, "ALL", Theme.Text, CaseFilter.All);
-        _lblPass = MakeCounterTile(grid, 1, "SUCCESS", Theme.Pass, CaseFilter.Pass);
-        _lblReject = MakeCounterTile(grid, 2, "FAILED", Theme.Reject, CaseFilter.Reject);
-        pnlCounters.Controls.Add(grid);
+        catch (Exception ex)
+        {
+            AppLog.Warn("Could not load the header logo.", ex);
+        }
     }
 
-    // One clickable counter tile: a big number over a caption. Clicking it pops up
-    // the cases in that category.
-    private Label MakeCounterTile(TableLayoutPanel grid, int row, string caption, Color colour, CaseFilter filter)
+    // -------------------------------------------------------------------------
+    // Product Information (labels above Case Logs showing the last/current scan)
+    // -------------------------------------------------------------------------
+
+    private void BuildProductInfo()
     {
-        var tile = new Panel
+        var header = new Label
+        {
+            Text = "PRODUCT INFORMATION",
+            Font = Theme.SectionFont,
+            ForeColor = Theme.Accent,
+            Dock = DockStyle.Top,
+            Height = 22,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(12, 0, 0, 0),
+            BackColor = Theme.SurfaceAlt,
+        };
+
+        var table = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            BackColor = Theme.Surface,
+            Padding = new Padding(10, 6, 10, 8),
+        };
+        for (int i = 0; i < 4; i++)
+        {
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        }
+
+        _piCasePacker = AddInfoField(table, 0, "CASE PACKER #");
+        _piProduct = AddInfoField(table, 1, "PRODUCT DESCRIPTION");
+        _piFa = AddInfoField(table, 2, "FA CODE");
+        _piProduction = AddInfoField(table, 3, "PRODUCTION DATE/TIME");
+
+        // Fill added first, header (Top) after, so the header sits above the values.
+        pnlProductInfo.Controls.Add(table);
+        pnlProductInfo.Controls.Add(header);
+    }
+
+    // One "CAPTION over big value" field inside the Product Information row.
+    private static Label AddInfoField(TableLayoutPanel table, int col, string caption)
+    {
+        var holder = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Theme.Surface,
-            BorderStyle = BorderStyle.FixedSingle,
-            Margin = new Padding(0, 0, 0, 8),
-            // Inner padding keeps the number and caption off the frame so the
-            // text isn't cramped against the border.
-            Padding = new Padding(0, 8, 0, 10),
-            Cursor = Cursors.Hand,
-        };
-        var number = new Label
-        {
-            Text = "0",
-            Font = Theme.CounterFont,
-            ForeColor = colour,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Cursor = Cursors.Hand,
+            Margin = new Padding(2, 0, 8, 0),
         };
         var cap = new Label
         {
             Text = caption,
-            Font = Theme.BoldFont,
+            Font = Theme.SmallFont,
             ForeColor = Theme.Muted,
-            Dock = DockStyle.Bottom,
-            Height = 22,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Cursor = Cursors.Hand,
+            Dock = DockStyle.Top,
+            Height = 16,
+            TextAlign = ContentAlignment.BottomLeft,
         };
-        tile.Controls.Add(number);
-        tile.Controls.Add(cap);
-
-        void Open(object? s, EventArgs e) => ShowCases(filter);
-        tile.Click += Open;
-        number.Click += Open;
-        cap.Click += Open;
-
-        // Highlight on hover; clear only when the mouse leaves the whole tile so it
-        // doesn't flicker while moving between the number and caption labels.
-        void HoverOn(object? s, EventArgs e) => tile.BackColor = Theme.SurfaceAlt;
-        tile.MouseEnter += HoverOn;
-        number.MouseEnter += HoverOn;
-        cap.MouseEnter += HoverOn;
-        tile.MouseLeave += (_, _) => tile.BackColor = Theme.Surface;
-
-        grid.Controls.Add(tile, 0, row);
-        return number;
-    }
-
-    // Pops up the list of cases behind a counter tile.
-    private void ShowCases(CaseFilter filter)
-    {
-        List<ScanRecord> cases = filter switch
+        var value = new Label
         {
-            CaseFilter.Pass => _allScans.Where(s => s.IsPass).ToList(),
-            CaseFilter.Reject => _allScans.Where(s => !s.IsPass).ToList(),
-            _ => _allScans.ToList(),
-        };
-        cases.Reverse(); // newest first
-
-        string title = filter switch
-        {
-            CaseFilter.Pass => "Passed cases",
-            CaseFilter.Reject => "Failed cases",
-            _ => "All cases",
-        } + $"  ({cases.Count})";
-
-        using var dialog = new Form
-        {
-            Text = title,
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(780, 480),
-            BackColor = Theme.Background,
+            Text = "—",
+            Font = Theme.CardStateFont,
             ForeColor = Theme.Text,
-            Font = Theme.NormalFont,
-            MinimizeBox = false,
-            MaximizeBox = false,
-            ShowIcon = false,
-        };
-        var list = new ListView
-        {
             Dock = DockStyle.Fill,
-            View = View.Details,
-            FullRowSelect = true,
-            BackColor = Theme.Surface,
-            ForeColor = Theme.Text,
-            Font = Theme.NormalFont,
-            BorderStyle = BorderStyle.None,
-            HeaderStyle = ColumnHeaderStyle.Nonclickable,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
         };
-        list.Columns.Add("Time", 130);
-        list.Columns.Add("Barcode", 330);
-        list.Columns.Add("Verdict", 90);
-        list.Columns.Add("Reason", 160);
-        list.Columns.Add("ms", 60, HorizontalAlignment.Right);
-        foreach (ScanRecord r in cases)
-        {
-            var item = new ListViewItem(r.ScannedAtLocal.ToString("HH:mm:ss"));
-            item.SubItems.Add(r.Barcode);
-            item.SubItems.Add(r.Verdict);
-            item.SubItems.Add(ReasonText(r.ResultCode));
-            item.SubItems.Add(r.TotalMs.ToString());
-            item.ForeColor = r.IsPass ? Theme.Pass : Theme.Reject;
-            list.Items.Add(item);
-        }
-        ThemeListHeaders(list);
-
-        var bar = new Panel { Dock = DockStyle.Bottom, Height = 48, BackColor = Theme.SurfaceAlt };
-        var close = new Button
-        {
-            Text = "Close",
-            Size = new Size(90, 32),
-            Location = new Point(dialog.ClientSize.Width - 104, 8),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            BackColor = Theme.Idle,
-            ForeColor = Theme.Text,
-            FlatStyle = FlatStyle.Flat,
-        };
-        close.FlatAppearance.BorderSize = 0;
-        close.Click += (_, _) => dialog.Close();
-        bar.Controls.Add(close);
-
-        dialog.Controls.Add(list);
-        dialog.Controls.Add(bar);
-        dialog.AcceptButton = close;
-        dialog.ShowDialog(this);
+        holder.Controls.Add(value);
+        holder.Controls.Add(cap);
+        table.Controls.Add(holder, col, 0);
+        return value;
     }
 
     // -------------------------------------------------------------------------
@@ -379,41 +332,34 @@ public partial class MainForm : Form
             lblVerdictDetail.ForeColor = Color.White;
 
             string detail = record.Barcode;
-            if (!string.IsNullOrEmpty(record.ProductName))
+            if (!string.IsNullOrEmpty(record.ProductDescription))
             {
-                detail += "    •    " + record.ProductName;
+                detail += "    •    " + record.ProductDescription;
             }
             detail += "    •    " + ReasonText(record.ResultCode);
             lblVerdictDetail.Text = detail;
 
-            // Keep the record so a counter tile can list its cases (cap the memory).
-            _allScans.Add(record);
-            if (_allScans.Count > 5000)
-            {
-                _allScans.RemoveAt(0);
-            }
+            // Product Information panel: show this (the latest) scan's details.
+            _piCasePacker.Text = record.CasePacker ?? "—";
+            _piProduct.Text = record.ProductDescription ?? "—";
+            _piFa.Text = record.FaCode ?? "—";
+            _piProduction.Text = record.ProductionAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
 
-            _total++;
-            if (record.IsPass)
-            {
-                _pass++;
-            }
-            else
-            {
-                _reject++;
-            }
-            _lblTotal.Text = _total.ToString();
-            _lblPass.Text = _pass.ToString();
-            _lblReject.Text = _reject.ToString();
-
-            var item = new ListViewItem(record.ScannedAtLocal.ToString("HH:mm:ss"));
+            // One Case Logs row - the 9 columns the operator sees (Id, Station,
+            // Barcode, Case Packer #, Product, FA Code, Production time, result,
+            // Scanned time). "—" stands in for a value we don't have.
+            var item = new ListViewItem(record.InExpressId?.ToString() ?? "—");
+            item.SubItems.Add(record.StationId);
             item.SubItems.Add(record.Barcode);
-            item.SubItems.Add(record.Verdict);
-            item.SubItems.Add(ReasonText(record.ResultCode));
-            item.SubItems.Add(record.TotalMs.ToString());
+            item.SubItems.Add(record.CasePacker ?? "—");
+            item.SubItems.Add(record.ProductDescription ?? "—");
+            item.SubItems.Add(record.FaCode ?? "—");
+            item.SubItems.Add(record.ProductionAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—");
+            item.SubItems.Add(record.ValidationResult);
+            item.SubItems.Add(record.ScannedAtLocal.ToString("yyyy-MM-dd HH:mm:ss"));
             item.ForeColor = record.IsPass ? Theme.Pass : Theme.Reject;
             lvScans.Items.Insert(0, item);
-            while (lvScans.Items.Count > 100)
+            while (lvScans.Items.Count > 200)
             {
                 lvScans.Items.RemoveAt(lvScans.Items.Count - 1);
             }
@@ -460,8 +406,28 @@ public partial class MainForm : Form
     // either bar to resize afterwards.
     private void SetInitialLayout()
     {
+        FitCaseLogColumns();
         // Event Logs height (horizontal split below Case Logs); Panel2 = Event Logs.
         SizeSplitter(splitBody, size: splitBody.Height, desiredPanel2: 150, panel1Min: 200, panel2Min: 64);
+    }
+
+    // ListView column widths are NOT auto-scaled by WinForms, so on a high-DPI
+    // screen the designer widths (set at 96 DPI) are too narrow and the bold header
+    // captions get cut ("Case Packe..."). Scale each width to the screen's DPI and
+    // make sure it's at least wide enough to draw the full header caption.
+    private void FitCaseLogColumns()
+    {
+        foreach (ColumnHeader col in lvScans.Columns)
+        {
+            if (string.IsNullOrEmpty(col.Text))
+            {
+                continue; // the empty trailing filler column sizes itself
+            }
+            int scaled = LogicalToDeviceUnits(col.Width);
+            int captionNeeds = TextRenderer.MeasureText(col.Text, Theme.BoldFont).Width
+                + LogicalToDeviceUnits(24); // owner-draw padding + breathing room
+            col.Width = Math.Max(scaled, captionNeeds);
+        }
     }
 
     // Sets a splitter to leave 'desiredPanel2' for Panel2, then tightens the min
@@ -514,8 +480,13 @@ public partial class MainForm : Form
     private void ShowManual(bool show)
     {
         _manualVisible = show;
+        // The manual bar is row 0 of tblMain (a TableLayoutPanel), so it sits above
+        // the Case Logs and can never overlap them or hide behind the taskbar. Set
+        // the row height (DPI-scaled so the textbox isn't clipped on high-DPI), then
+        // force the table to relayout - it doesn't react to a RowStyle change alone.
+        tblMain.RowStyles[0].Height = show ? LogicalToDeviceUnits(52) : 0;
         pnlManual.Visible = show;
-        root.RowStyles[4].Height = show ? 48 : 0;
+        tblMain.PerformLayout();
         lblModeBadge.Visible = show;
 
         // The button reads as a toggle: it names the mode you'd switch TO, and
@@ -575,7 +546,8 @@ public partial class MainForm : Form
         {
             btnScan.Enabled = true;
             btnScan.Text = original;
-            txtManual.SelectAll();
+            // Clear the field so the operator can scan the next case straight away.
+            txtManual.Clear();
             txtManual.Focus();
         }
     }

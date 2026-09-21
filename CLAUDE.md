@@ -32,11 +32,20 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 - **S7.NET plus** (`S7netplus`) for the PLC. **Microsoft.Data.SqlClient** for SQL Server.
 - Config in **`%ProgramData%\CCube\settings.json`** (secrets DPAPI-encrypted).
 - **Manual Scan** is a button on the run screen that opens a panel where the operator
-  types/scans a barcode by hand; it validates through InExpress exactly like a PLC case.
+  types/scans a barcode by hand; it runs the *exact same* validate → display → save path
+  as a PLC case (through `ScanEngine.ManualCheck` → the same `Report()`), only it writes
+  nothing back to the PLC.
 - The run screen is a **light/dark industrial HMI** (see `Forms/Theme.cs`, toggle in the
-  header); it opens maximized, auto-scans (no start/stop button), and shows Case Logs,
-  Event Logs, a PLC/InExpress/Scanner health strip (green only when confirmed good, red
-  otherwise), counters, and a reject-reasons breakdown.
+  header). It opens maximized and **cannot be closed from the UI** (no minimize/maximize/
+  close buttons, Alt+F4 blocked — only Task Manager can end it). It auto-scans (no start/
+  stop button) and shows a **Product Information** card (labels for the last/current scan),
+  a full-width **Case Logs** table, **Event Logs**, and a PLC/InExpress/Scanner **health
+  strip** (green only when confirmed good, red otherwise). The **Manual Scan** bar toggles
+  in at the *top* of the Case Logs area (not the window bottom, where a maximized window's
+  taskbar hides it). The ML+ Solutions logo (`CCube/Assets/ml-logo.png`) sits top-left.
+  Case Logs has 9 columns: Id (from InExpress), Station, Barcode, Case Packer # (parsed
+  from the barcode), Product Description + FA Code (from InExpress), Production Date/Time
+  (parsed from the barcode), Validation Result (Good/Reject), Scanned Date/Time.
 
 ## Where things live (single project, `CCube/`)
 
@@ -46,7 +55,7 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 | `Forms/` | The screens: `MainForm` (operator run screen), `SettingsForm`, `AdminPromptForm`, `Theme`. |
 | `Plc/` | The PLC contract + link. `Db100Layout`/`Db100Frame`/`S7Data` = the byte format; `IPlcLink` with `S7PlcLink` (real) and `DemoPlcLink` (fake); `ResultCode` (verdict reasons). |
 | `Core/` | The logic: `ScanEngine` (the loop), `Validation`, `HealthMonitor`, `Settings*`, `CredentialProtector`, `PasswordHasher`, `AppLog`. |
-| `Data/` | SQL: `Db` (helper), `InExpressValidator` (the validate SP call), `HistoryRepository` (audit log). |
+| `Data/` | SQL seams: `IValidator`+`InExpressValidator` (the validate SP call → `CaseResult`), `IHistorySink` with `SqlHistoryRepository` (INSERT ScanHistory), `CsvHistoryRepository` (daily CSV backup) and `CompositeHistorySink` (writes to both at once). |
 | `Models/` | Small data holders like `ScanRecord`. |
 | `database/` | SQL scripts: CCube schema + the InExpress validate proc (reference stub). |
 | `scripts/` | `build.ps1`, `start.ps1`, `publish.ps1`, `watch-log.ps1`. |
@@ -58,9 +67,16 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 1. Read the whole PLC data block once (a consistent snapshot).
 2. New case? (the PLC's `SeqNo` changed **and** its heartbeat is alive).
 3. Scanner no-read or implausible barcode → REJECT immediately (no DB call).
-4. Otherwise call `InExpressValidator` → `1` (PASS) or `0` (REJECT), with a hard ~2 s timeout.
+4. Otherwise call `InExpressValidator` → the validate proc returns one row:
+   `Id, ProductDescription, FaCode, IsValid`. `IsValid=1` → PASS, `0` → REJECT. Hard ~2 s
+   timeout; any error/timeout ⇒ REJECT (fail-safe).
 5. Write the result to the PLC, echoing `AckSeqNo` **last** so the PLC knows the answer is ready.
-6. Log the scan to the CCube DB (off the critical path).
+6. Build the `ScanRecord`: the InExpress fields above **plus** two fields parsed from the
+   barcode client-side for display only — **Case Packer #** and **Production Date/Time**
+   (`Core/Validation.cs` → `BarcodeFields`, v1's CBL positions). Parsing is display/history
+   only; it is NEVER part of the verdict.
+7. Save the scan to history — to **both** the CCube DB and a daily **CSV** backup (the boss
+   wants two copies), off the critical path so neither can stall the line.
 
 Two heartbeats run continuously (~500 ms): watch the **PLC heartbeat** (detect a hung PLC) and
 pulse our own **PC heartbeat** (so the PLC fail-safe-rejects if we die).
@@ -79,15 +95,24 @@ WinForms drag-and-drop designer; VS Code works too but has no visual designer.)
 
 ## Integration items still open (confirm before plant deployment)
 
-- **InExpress stored proc** is not final. The app calls `usp_ValidateCase(@Barcode) → IsValid bit`
-  and isolates that in `Data/InExpressValidator.cs`. Confirm the final name/params/return with PMI.
+- **InExpress stored proc** is not final. PMI's contract: `usp_ValidateCase(@Barcode)` returns
+  ONE row `Id INT, ProductDescription NVARCHAR, FaCode NVARCHAR, IsValid BIT`. This is isolated
+  in `Data/InExpressValidator.cs`; the local dummy (`database/02-inexpress-validate.sql`, a seeded
+  `dbo.CaseData` table) simulates it. Confirm the final name/params/columns with PMI.
 - **PLC data-block number + byte offsets** live in `Plc/Db100Layout.cs`; confirm against the real
   TIA Portal program. The DB must have "optimized block access" **off** and PUT/GET enabled.
 - **Connection strings / PLC IP / station id** are configured per-machine in `settings.json` — no
   code change to move from laptop to plant.
-- **Barcode case-packer position** for the Rejects Monitoring grid is taken from characters 33-34 of
-  the barcode (v1's rule, in `Core/Validation.cs` → `BarcodeFields.CasePackerId`). Confirm the real
-  position with PMI. **Shift boundaries** (1st 06-14, 2nd 14-22, 3rd 22-06) are in `MainForm.ShiftIndex`.
+- **Barcode field positions** (v1's CBL rule, all in `Core/Validation.cs` → `BarcodeFields`,
+  1-based chars): **Case Packer #** = chars 33-34; **Production Date/Time** = year 23-24,
+  month 25-26, day 27-28, hour 35-36, min 37-38, sec 39-40. These feed display/history only,
+  never the verdict. Confirm the real positions with PMI; they return null for a short/garbled
+  barcode so the grid shows a blank cell instead of a wrong value.
+- **Local test databases**: `localhost\SQLEXPRESS`, `InExpress2` (dummy `dbo.CaseData` + the
+  dummy `usp_ValidateCase`) and `CCube2` (`dbo.ScanHistory`). Recreate/refresh them by running
+  `database/02-inexpress-validate.sql` and `database/01-ccube-schema.sql`.
+- **CSV history backup** is written to `AppSettings.HistoryCsvFolder` (default `C:\CCube\History`),
+  one file per day under a `yyyy-MM` subfolder. It runs alongside the DB save, not instead of it.
 
 ## Reference material (not shipping code)
 

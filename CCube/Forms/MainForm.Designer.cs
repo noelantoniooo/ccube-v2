@@ -23,6 +23,7 @@ partial class MainForm
     private TableLayoutPanel root = null!;
     // Header
     private Panel pnlHeader = null!;
+    private PictureBox pbLogo = null!;
     private Label lblBrand = null!;
     private Label lblBrandSub = null!;
     private Label lblStation = null!;
@@ -38,15 +39,20 @@ partial class MainForm
     private Label lblVerdictDetail = null!;
     // Main
     private SplitContainer splitBody = null!;
-    private Panel pnlCounters = null!;
+    private TableLayoutPanel tblMain = null!;
+    private Panel pnlProductInfo = null!;
     private Panel pnlLogs = null!;
     private Label lblLogsHeader = null!;
     private ListView lvScans = null!;
-    private ColumnHeader colTime = null!;
+    private ColumnHeader colId = null!;
+    private ColumnHeader colStation = null!;
     private ColumnHeader colBarcode = null!;
-    private ColumnHeader colVerdict = null!;
-    private ColumnHeader colReason = null!;
-    private ColumnHeader colMs = null!;
+    private ColumnHeader colCasePacker = null!;
+    private ColumnHeader colProduct = null!;
+    private ColumnHeader colFa = null!;
+    private ColumnHeader colProduction = null!;
+    private ColumnHeader colResult = null!;
+    private ColumnHeader colScanned = null!;
     // Event logs
     private Panel pnlEvents = null!;
     private Label lblEventsHeader = null!;
@@ -74,6 +80,7 @@ partial class MainForm
 
         root = new TableLayoutPanel();
         pnlHeader = new Panel();
+        pbLogo = new PictureBox();
         lblBrand = new Label();
         lblBrandSub = new Label();
         lblStation = new Label();
@@ -86,15 +93,20 @@ partial class MainForm
         lblVerdict = new Label();
         lblVerdictDetail = new Label();
         splitBody = new SplitContainer();
-        pnlCounters = new Panel();
+        tblMain = new TableLayoutPanel();
+        pnlProductInfo = new Panel();
         pnlLogs = new Panel();
         lblLogsHeader = new Label();
         lvScans = new ListView();
-        colTime = new ColumnHeader();
+        colId = new ColumnHeader();
+        colStation = new ColumnHeader();
         colBarcode = new ColumnHeader();
-        colVerdict = new ColumnHeader();
-        colReason = new ColumnHeader();
-        colMs = new ColumnHeader();
+        colCasePacker = new ColumnHeader();
+        colProduct = new ColumnHeader();
+        colFa = new ColumnHeader();
+        colProduction = new ColumnHeader();
+        colResult = new ColumnHeader();
+        colScanned = new ColumnHeader();
         pnlEvents = new Panel();
         lblEventsHeader = new Label();
         lvEvents = new ListView();
@@ -111,27 +123,31 @@ partial class MainForm
         root.Dock = DockStyle.Fill;
         root.BackColor = Theme.Background;
         root.ColumnCount = 1;
-        root.RowCount = 5;
+        root.RowCount = 4;
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));   // header
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));   // health strip
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // verdict
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // main + event logs (draggable split)
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));    // manual (hidden)
 
         // --- Header ---
         pnlHeader.Dock = DockStyle.Fill;
         pnlHeader.BackColor = Theme.HeaderGreen;
+        // ML+ Solutions logo, top-left, before the app name (image loaded in code).
+        pbLogo.Location = new Point(16, 8);
+        pbLogo.Size = new Size(54, 54);
+        pbLogo.SizeMode = PictureBoxSizeMode.Zoom;
+        pbLogo.BackColor = Color.Transparent;
         lblBrand.Text = "C-CUBE";
         lblBrand.Font = Theme.BrandFont;
         lblBrand.ForeColor = Color.White;
         lblBrand.AutoSize = true;
-        lblBrand.Location = new Point(22, 11);
+        lblBrand.Location = new Point(82, 11);
         lblBrandSub.Text = "Central Case Checker  ·  PMFTC";
         lblBrandSub.Font = Theme.BrandSubFont;
         lblBrandSub.ForeColor = Theme.HeaderText;
         lblBrandSub.AutoSize = true;
-        lblBrandSub.Location = new Point(24, 44);
+        lblBrandSub.Location = new Point(84, 44);
 
         var headerRight = new FlowLayoutPanel
         {
@@ -200,6 +216,7 @@ partial class MainForm
         headerRight.Controls.Add(lblStation);
         headerRight.Controls.Add(lblModeBadge);
         pnlHeader.Controls.Add(headerRight);
+        pnlHeader.Controls.Add(pbLogo);
         pnlHeader.Controls.Add(lblBrand);
         pnlHeader.Controls.Add(lblBrandSub);
 
@@ -225,12 +242,14 @@ partial class MainForm
         pnlVerdict.Controls.Add(lblVerdict);
         pnlVerdict.Controls.Add(lblVerdictDetail);
 
-        // --- Main: counters (left, stacked) + Case Logs. Tiles built in code. ---
-        pnlCounters.Dock = DockStyle.Left;
-        pnlCounters.Width = 168;
-        pnlCounters.BackColor = Theme.Background;
-        pnlCounters.Padding = new Padding(0, 0, 12, 0);
+        // --- Product Information card (labels for the last scan), above Case Logs.
+        //     Its header + value labels are built in code (BuildProductInfo). ---
+        pnlProductInfo.Dock = DockStyle.Fill;
+        pnlProductInfo.BackColor = Theme.Surface;
+        pnlProductInfo.BorderStyle = BorderStyle.FixedSingle;
+        pnlProductInfo.Margin = new Padding(0, 0, 0, 8);
 
+        // --- Main: the Case Logs table fills the rest of the area (no side counters).
         pnlLogs.Dock = DockStyle.Fill;
         pnlLogs.BackColor = Theme.Surface;
         pnlLogs.BorderStyle = BorderStyle.FixedSingle;
@@ -250,22 +269,38 @@ partial class MainForm
         lvScans.Font = Theme.NormalFont;
         lvScans.BorderStyle = BorderStyle.None;
         lvScans.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-        colTime.Text = "Time";
-        colTime.Width = 90;
+        // The 9 columns: Id + Station from the app, Barcode + Case Packer + Production
+        // time parsed from the barcode, Product + FA Code + result from InExpress,
+        // and the time the app received the scan.
+        // Widths chosen so each header caption shows in full (the owner-drawn header
+        // trims ~16px for padding, so these are the caption width + margin + data).
+        colId.Text = "Id";
+        colId.Width = 60;
+        colStation.Text = "Station";
+        colStation.Width = 80;
         colBarcode.Text = "Barcode";
-        colBarcode.Width = 300;
-        colVerdict.Text = "Verdict";
-        colVerdict.Width = 90;
-        colReason.Text = "Reason";
-        colReason.Width = 170;
-        colMs.Text = "ms";
-        colMs.Width = 60;
-        colMs.TextAlign = HorizontalAlignment.Right;
-        lvScans.Columns.Add(colTime);
+        colBarcode.Width = 320;
+        colCasePacker.Text = "Case Packer #";
+        colCasePacker.Width = 120;
+        colProduct.Text = "Product Description";
+        colProduct.Width = 210;
+        colFa.Text = "FA Code";
+        colFa.Width = 100;
+        colProduction.Text = "Production Date/Time";
+        colProduction.Width = 165;
+        colResult.Text = "Validation Result";
+        colResult.Width = 135;
+        colScanned.Text = "Scanned Date/Time";
+        colScanned.Width = 160;
+        lvScans.Columns.Add(colId);
+        lvScans.Columns.Add(colStation);
         lvScans.Columns.Add(colBarcode);
-        lvScans.Columns.Add(colVerdict);
-        lvScans.Columns.Add(colReason);
-        lvScans.Columns.Add(colMs);
+        lvScans.Columns.Add(colCasePacker);
+        lvScans.Columns.Add(colProduct);
+        lvScans.Columns.Add(colFa);
+        lvScans.Columns.Add(colProduction);
+        lvScans.Columns.Add(colResult);
+        lvScans.Columns.Add(colScanned);
         pnlLogs.Controls.Add(lvScans);
         pnlLogs.Controls.Add(lblLogsHeader);
 
@@ -302,9 +337,14 @@ partial class MainForm
         pnlEvents.Controls.Add(lvEvents);
         pnlEvents.Controls.Add(lblEventsHeader);
 
-        // --- Manual scan (hidden until toggled) ---
+        // --- Manual scan bar. It's the TOP row of tblMain (above the Product
+        //     Information card), hidden until toggled. Living here - not at the
+        //     bottom of the window - means a maximized window's taskbar can never
+        //     cover it, and a TableLayoutPanel row can never overlap the log below. ---
         pnlManual.Dock = DockStyle.Fill;
+        pnlManual.Margin = new Padding(0, 0, 0, 8);
         pnlManual.BackColor = Theme.SurfaceAlt;
+        pnlManual.BorderStyle = BorderStyle.FixedSingle;
         pnlManual.Visible = false;
         var manualHint = new Label
         {
@@ -344,17 +384,29 @@ partial class MainForm
         splitBody.FixedPanel = FixedPanel.Panel2;   // keep the Event Logs height on resize
         splitBody.SplitterWidth = 6;
         splitBody.BackColor = Theme.Border;          // makes the splitter bar visible
-        // Case Logs area: counters dock on the left, the log fills the rest.
+        // Case Logs area: a 3-row table so the rows never overlap - manual scan bar
+        // (row 0, height toggled 0/52), Product Information card (row 1), Case Logs
+        // table (row 2, fills the rest).
+        tblMain.Dock = DockStyle.Fill;
+        tblMain.BackColor = Theme.Background;
+        tblMain.ColumnCount = 1;
+        tblMain.RowCount = 3;
+        tblMain.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        tblMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));    // manual (hidden)
+        tblMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // product info
+        tblMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // case logs
+        tblMain.Controls.Add(pnlManual, 0, 0);
+        tblMain.Controls.Add(pnlProductInfo, 0, 1);
+        tblMain.Controls.Add(pnlLogs, 0, 2);
+
         splitBody.Panel1.Padding = new Padding(14, 10, 14, 6);
-        splitBody.Panel1.Controls.Add(pnlLogs);
-        splitBody.Panel1.Controls.Add(pnlCounters);
+        splitBody.Panel1.Controls.Add(tblMain);
         splitBody.Panel2.Controls.Add(pnlEvents);
 
         root.Controls.Add(pnlHeader, 0, 0);
         root.Controls.Add(pnlHealth, 0, 1);
         root.Controls.Add(pnlVerdict, 0, 2);
         root.Controls.Add(splitBody, 0, 3);
-        root.Controls.Add(pnlManual, 0, 4);
 
         // MainForm
         AutoScaleDimensions = new SizeF(7F, 15F);
@@ -367,6 +419,13 @@ partial class MainForm
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(940, 680);
         WindowState = FormWindowState.Maximized;
+        // Lock the window: no minimize / maximize / close buttons and no system menu,
+        // so the operator can't close or move the station off-screen. Combined with
+        // the FormClosing guard (blocks Alt+F4), the app can only be ended via Task
+        // Manager. It stays maximized and always on the full screen.
+        ControlBox = false;
+        MinimizeBox = false;
+        MaximizeBox = false;
         Load += MainForm_Load;
         FormClosing += MainForm_FormClosing;
         ResumeLayout(false);

@@ -9,8 +9,11 @@
 //
 // The contract we rely on:
 //     EXEC dbo.usp_ValidateCase @Barcode = '...'
-//   returns exactly ONE row containing an "IsValid" bit (1 = valid, 0 = invalid),
-//   and optionally ProductName / BatchNo / Reason columns for display + history.
+//   returns exactly ONE row with:
+//     IsValid            bit       1 = valid (PASS), 0 = invalid (REJECT)  [required]
+//     Id                 int       the InExpress row id                    [optional]
+//     ProductDescription nvarchar  for display + history                   [optional]
+//     FaCode             nvarchar  for display + history                   [optional]
 //
 // Security: the barcode is passed as a PARAMETER (@Barcode), never glued into the
 // SQL text, so a malicious barcode can't inject SQL.
@@ -58,17 +61,17 @@ public sealed class InExpressValidator : IValidator
             {
                 // No row = we can't confirm it's valid = reject (fail-safe).
                 AppLog.Warn($"InExpress returned no row for '{barcode}'; treating as INVALID.");
-                return new CaseResult(false, Reason: "No result from validation proc");
+                return new CaseResult(false);
             }
 
             bool isValid = ReadIsValid(reader);
-            string? product = TryGetString(reader, "ProductName");
-            string? batch = TryGetString(reader, "BatchNo");
-            string? reason = TryGetString(reader, "Reason");
+            int? id = TryGetInt(reader, "Id");
+            string? product = TryGetString(reader, "ProductDescription");
+            string? faCode = TryGetString(reader, "FaCode");
 
             AppLog.Info($"InExpress: '{barcode}' -> {(isValid ? "VALID" : "INVALID")}"
-                + (reason is null ? "" : $" ({reason})"));
-            return new CaseResult(isValid, product, batch, reason);
+                + (id is null ? "" : $" (id {id})"));
+            return new CaseResult(isValid, id, product, faCode);
         }
         catch (Exception ex)
         {
@@ -137,6 +140,24 @@ public sealed class InExpressValidator : IValidator
         {
             int i = reader.GetOrdinal(columnName);
             return reader.IsDBNull(i) ? null : reader.GetValue(i)?.ToString();
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    // Read an optional integer column; return null if it's missing or NULL.
+    private static int? TryGetInt(SqlDataReader reader, string columnName)
+    {
+        try
+        {
+            int i = reader.GetOrdinal(columnName);
+            if (reader.IsDBNull(i))
+            {
+                return null;
+            }
+            return Convert.ToInt32(reader.GetValue(i));
         }
         catch (IndexOutOfRangeException)
         {

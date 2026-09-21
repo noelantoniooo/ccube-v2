@@ -18,11 +18,11 @@ public sealed class SqlHistoryRepository : IHistorySink
 {
     private const string InsertSql = @"
 INSERT INTO dbo.ScanHistory
-    (ScannedAtUtc, StationId, Barcode, Verdict, ResultCode, IsSystemReject,
-     ProductName, BatchNo, InExpressMs, TotalMs)
+    (ScannedAtUtc, StationId, Barcode, CasePacker, InExpressId,
+     ProductDescription, FaCode, ProductionAt, ValidationResult, ResultCode)
 VALUES
-    (@ScannedAtUtc, @StationId, @Barcode, @Verdict, @ResultCode, @IsSystemReject,
-     @ProductName, @BatchNo, @InExpressMs, @TotalMs);";
+    (@ScannedAtUtc, @StationId, @Barcode, @CasePacker, @InExpressId,
+     @ProductDescription, @FaCode, @ProductionAt, @ValidationResult, @ResultCode);";
 
     private readonly string _connectionString;
 
@@ -42,13 +42,13 @@ VALUES
             command.Parameters.AddWithValue("@ScannedAtUtc", record.ScannedAtUtc);
             command.Parameters.AddWithValue("@StationId", record.StationId);
             command.Parameters.AddWithValue("@Barcode", record.Barcode);
-            command.Parameters.AddWithValue("@Verdict", record.Verdict);
+            command.Parameters.AddWithValue("@CasePacker", (object?)record.CasePacker ?? DBNull.Value);
+            command.Parameters.AddWithValue("@InExpressId", (object?)record.InExpressId ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ProductDescription", (object?)record.ProductDescription ?? DBNull.Value);
+            command.Parameters.AddWithValue("@FaCode", (object?)record.FaCode ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ProductionAt", (object?)record.ProductionAt ?? DBNull.Value);
+            command.Parameters.AddWithValue("@ValidationResult", record.ValidationResult);
             command.Parameters.AddWithValue("@ResultCode", record.ResultCode.ToString());
-            command.Parameters.AddWithValue("@IsSystemReject", record.IsSystemReject);
-            command.Parameters.AddWithValue("@ProductName", (object?)record.ProductName ?? DBNull.Value);
-            command.Parameters.AddWithValue("@BatchNo", (object?)record.BatchNo ?? DBNull.Value);
-            command.Parameters.AddWithValue("@InExpressMs", record.InExpressMs);
-            command.Parameters.AddWithValue("@TotalMs", record.TotalMs);
 
             command.ExecuteNonQuery();
         }
