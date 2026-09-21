@@ -63,7 +63,6 @@ partial class MainForm
     // Manual scan
     private Panel pnlManual = null!;
     private TextBox txtManual = null!;
-    private Button btnScan = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -115,7 +114,6 @@ partial class MainForm
         colEvtMsg = new ColumnHeader();
         pnlManual = new Panel();
         txtManual = new TextBox();
-        btnScan = new Button();
 
         SuspendLayout();
 
@@ -269,6 +267,7 @@ partial class MainForm
         lvScans.Font = Theme.NormalFont;
         lvScans.BorderStyle = BorderStyle.None;
         lvScans.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+        lvScans.Scrollable = true;   // show a vertical scrollbar when rows overflow
         // The 9 columns: Id + Station from the app, Barcode + Case Packer + Production
         // time parsed from the barcode, Product + FA Code + result from InExpress,
         // and the time the app received the scan.
@@ -348,42 +347,39 @@ partial class MainForm
         pnlManual.Visible = false;
         var manualHint = new Label
         {
-            Text = "Manual scan:",
+            Text = "SCAN BARCODE",
             Font = Theme.BoldFont,
-            ForeColor = Theme.Muted,
+            ForeColor = Theme.Accent,
             AutoSize = true,
-            Location = new Point(18, 14),
+            Location = new Point(16, 22),
         };
-        txtManual.Font = Theme.NormalFont;
-        txtManual.Size = new Size(440, 26);
-        txtManual.Location = new Point(120, 10);
+        // No Scan button: a real barcode scanner types the code and sends Enter, so
+        // the operator just scans into this box. It's big + monospaced so the barcode
+        // is easy to read. The box stretches to the right edge (anchored).
+        txtManual.Font = new Font("Consolas", 15F);
+        txtManual.Size = new Size(820, 34);
+        txtManual.Location = new Point(150, 12);
+        txtManual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         txtManual.BackColor = Theme.Surface;
         txtManual.ForeColor = Theme.Text;
         txtManual.BorderStyle = BorderStyle.FixedSingle;
         txtManual.MaxLength = Plc.Db100Layout.BarcodeMaxLength; // 40 - same as the PLC field
-        txtManual.PlaceholderText = "Type or scan a barcode, then press Enter";
+        txtManual.PlaceholderText = "Scan or type a barcode, then press Enter";
         txtManual.KeyDown += txtManual_KeyDown;
-        btnScan.Text = "Scan";
-        btnScan.Font = Theme.BoldFont;
-        btnScan.ForeColor = Color.White;
-        btnScan.BackColor = Theme.Accent;
-        btnScan.FlatStyle = FlatStyle.Flat;
-        btnScan.FlatAppearance.BorderSize = 0;
-        btnScan.Size = new Size(120, 28);
-        btnScan.Location = new Point(580, 9);
-        btnScan.Cursor = Cursors.Hand;
-        btnScan.Click += btnScan_Click;
         pnlManual.Controls.Add(manualHint);
         pnlManual.Controls.Add(txtManual);
-        pnlManual.Controls.Add(btnScan);
 
         // place rows
-        // Case Logs area (top) and Event Logs (bottom) share a draggable splitter.
+        // Case Logs area (top) and Event Logs (bottom) share a draggable splitter -
+        // drag it to make either panel bigger. A wider bar in the accent colour makes
+        // it obvious it can be grabbed.
         splitBody.Dock = DockStyle.Fill;
         splitBody.Orientation = Orientation.Horizontal;
-        splitBody.FixedPanel = FixedPanel.Panel2;   // keep the Event Logs height on resize
+        splitBody.FixedPanel = FixedPanel.Panel2;   // keep the Event Logs height on window resize
         splitBody.SplitterWidth = 6;
-        splitBody.BackColor = Theme.Border;          // makes the splitter bar visible
+        splitBody.BackColor = Theme.Border;          // subtle splitter bar (as before)
+        splitBody.Panel1MinSize = 160;               // Case Logs can't be squashed away
+        splitBody.Panel2MinSize = 60;                // Event Logs can shrink to give Case Logs room
         // Case Logs area: a 3-row table so the rows never overlap - manual scan bar
         // (row 0, height toggled 0/52), Product Information card (row 1), Case Logs
         // table (row 2, fills the rest).

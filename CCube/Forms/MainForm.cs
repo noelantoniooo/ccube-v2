@@ -44,7 +44,6 @@ public partial class MainForm : Form
         AddClickFeedback(btnConfig);
         AddClickFeedback(btnManual);
         AddClickFeedback(btnTheme);
-        AddClickFeedback(btnScan);
 
         // Theme the list column headers (WinForms draws them white by default,
         // which looks wrong in dark mode).
@@ -110,9 +109,11 @@ public partial class MainForm : Form
             // AND a daily CSV backup on disk. The CSV always runs so history survives
             // a database outage.
             var sinks = new List<IHistorySink>();
+            SqlHistoryRepository? sqlHistory = null;
             if (_settings.CCube.IsConfigured)
             {
-                sinks.Add(new SqlHistoryRepository(_settings.CCube.BuildConnectionString()));
+                sqlHistory = new SqlHistoryRepository(_settings.CCube.BuildConnectionString());
+                sinks.Add(sqlHistory);
             }
             sinks.Add(new CsvHistoryRepository(_settings.HistoryCsvFolder));
             IHistorySink history = sinks.Count == 1 ? sinks[0] : new CompositeHistorySink(sinks.ToArray());
@@ -125,6 +126,14 @@ public partial class MainForm : Form
             _engine.Start();
 
             OnHealthChanged(_health);
+
+            // Refill the Case Logs from history so a restart (e.g. a theme change)
+            // doesn't wipe the on-screen list. The rows are already saved; this just
+            // shows them again.
+            if (sqlHistory is not null)
+            {
+                LoadRecentHistory(sqlHistory);
+            }
 
             // Manual Scan starts hidden; the operator opens it with the button.
             ShowManual(false);
@@ -339,31 +348,64 @@ public partial class MainForm : Form
             detail += "    •    " + ReasonText(record.ResultCode);
             lblVerdictDetail.Text = detail;
 
-            // Product Information panel: show this (the latest) scan's details.
-            _piCasePacker.Text = record.CasePacker ?? "—";
-            _piProduct.Text = record.ProductDescription ?? "—";
-            _piFa.Text = record.FaCode ?? "—";
-            _piProduction.Text = record.ProductionAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
-
-            // One Case Logs row - the 9 columns the operator sees (Id, Station,
-            // Barcode, Case Packer #, Product, FA Code, Production time, result,
-            // Scanned time). "—" stands in for a value we don't have.
-            var item = new ListViewItem(record.InExpressId?.ToString() ?? "—");
-            item.SubItems.Add(record.StationId);
-            item.SubItems.Add(record.Barcode);
-            item.SubItems.Add(record.CasePacker ?? "—");
-            item.SubItems.Add(record.ProductDescription ?? "—");
-            item.SubItems.Add(record.FaCode ?? "—");
-            item.SubItems.Add(record.ProductionAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—");
-            item.SubItems.Add(record.ValidationResult);
-            item.SubItems.Add(record.ScannedAtLocal.ToString("yyyy-MM-dd HH:mm:ss"));
-            item.ForeColor = record.IsPass ? Theme.Pass : Theme.Reject;
-            lvScans.Items.Insert(0, item);
-            while (lvScans.Items.Count > 200)
+            // Show this (the latest) scan in the Product Information card and add it
+            // as the newest Case Logs row.
+            UpdateProductInfo(record);
+            lvScans.Items.Insert(0, BuildScanRow(record));
+            while (lvScans.Items.Count > MaxCaseLogRows)
             {
                 lvScans.Items.RemoveAt(lvScans.Items.Count - 1);
             }
         });
+    }
+
+    // How many rows to keep on screen (live and reloaded from history).
+    private const int MaxCaseLogRows = 200;
+
+    // Fill the Product Information card from one scan record.
+    private void UpdateProductInfo(ScanRecord record)
+    {
+        _piCasePacker.Text = record.CasePacker ?? "—";
+        _piProduct.Text = record.ProductDescription ?? "—";
+        _piFa.Text = record.FaCode ?? "—";
+        _piProduction.Text = record.ProductionAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—";
+    }
+
+    // Build one Case Logs row - the 9 columns the operator sees (Id, Station,
+    // Barcode, Case Packer #, Product, FA Code, Production time, result, Scanned
+    // time). "—" stands in for a value we don't have.
+    private static ListViewItem BuildScanRow(ScanRecord record)
+    {
+        var item = new ListViewItem(record.InExpressId?.ToString() ?? "—");
+        item.SubItems.Add(record.StationId);
+        item.SubItems.Add(record.Barcode);
+        item.SubItems.Add(record.CasePacker ?? "—");
+        item.SubItems.Add(record.ProductDescription ?? "—");
+        item.SubItems.Add(record.FaCode ?? "—");
+        item.SubItems.Add(record.ProductionAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "—");
+        item.SubItems.Add(record.ValidationResult);
+        item.SubItems.Add(record.ScannedAtLocal.ToString("yyyy-MM-dd HH:mm:ss"));
+        item.ForeColor = record.IsPass ? Theme.Pass : Theme.Reject;
+        return item;
+    }
+
+    // Repopulate the Case Logs from the CCube DB on startup so a restart (e.g. a
+    // theme change) doesn't blank the on-screen list. Rows come back newest-first,
+    // so adding them in order keeps the newest on top. The big verdict panel is
+    // left at READY - these are past scans, not a fresh result.
+    private void LoadRecentHistory(SqlHistoryRepository repo)
+    {
+        List<ScanRecord> recent = repo.LoadRecent(_settings.StationId, MaxCaseLogRows);
+        if (recent.Count == 0)
+        {
+            return;
+        }
+        foreach (ScanRecord record in recent)
+        {
+            lvScans.Items.Add(BuildScanRow(record));
+        }
+        UpdateProductInfo(recent[0]); // recent[0] is the most recent scan
+        AppLog.Info($"Loaded {recent.Count} recent scan(s) from history.");
     }
 
     private void OnHealthChanged(HealthMonitor h)
@@ -484,7 +526,7 @@ public partial class MainForm : Form
         // the Case Logs and can never overlap them or hide behind the taskbar. Set
         // the row height (DPI-scaled so the textbox isn't clipped on high-DPI), then
         // force the table to relayout - it doesn't react to a RowStyle change alone.
-        tblMain.RowStyles[0].Height = show ? LogicalToDeviceUnits(52) : 0;
+        tblMain.RowStyles[0].Height = show ? LogicalToDeviceUnits(58) : 0;
         pnlManual.Visible = show;
         tblMain.PerformLayout();
         lblModeBadge.Visible = show;
@@ -506,8 +548,6 @@ public partial class MainForm : Form
             btnManual.FlatAppearance.BorderSize = 1;
         }
     }
-
-    private void btnScan_Click(object? sender, EventArgs e) => DoManualScan();
 
     private void txtManual_KeyDown(object? sender, KeyEventArgs e)
     {
@@ -533,20 +573,18 @@ public partial class MainForm : Form
             return;
         }
 
-        // Show a loader on the button; run the check off the UI thread so a slow
-        // InExpress call can't freeze the screen.
-        btnScan.Enabled = false;
-        string original = btnScan.Text;
-        btnScan.Text = "Scanning…";
+        // Lock the box while validating (runs off the UI thread so a slow InExpress
+        // call can't freeze the screen), then clear + refocus so the operator can
+        // scan the next case straight away. No Scan button: Enter (which a barcode
+        // scanner sends automatically) submits.
+        txtManual.Enabled = false;
         try
         {
             await Task.Run(() => _engine?.ManualCheck(barcode, scannerNoRead: false));
         }
         finally
         {
-            btnScan.Enabled = true;
-            btnScan.Text = original;
-            // Clear the field so the operator can scan the next case straight away.
+            txtManual.Enabled = true;
             txtManual.Clear();
             txtManual.Focus();
         }
