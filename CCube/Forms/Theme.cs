@@ -87,4 +87,7 @@ public static class Theme
     public static readonly Font SmallFont = new("Segoe UI", 8F, FontStyle.Regular);
     public static readonly Font CounterFont = new("Segoe UI", 20F, FontStyle.Bold);
     public static readonly Font CardStateFont = new("Segoe UI", 12F, FontStyle.Bold);
+    // The big value text in the Product Information card.
+    public static readonly Font InfoCaptionFont = new("Segoe UI", 9F, FontStyle.Bold);
+    public static readonly Font InfoValueFont = new("Segoe UI", 15.5F, FontStyle.Bold);
 }

@@ -389,8 +389,8 @@ partial class MainForm
         tblMain.RowCount = 3;
         tblMain.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         tblMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));    // manual (hidden)
-        tblMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));   // product info
-        tblMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // case logs
+        tblMain.RowStyles.Add(new RowStyle(SizeType.Absolute, 128F));  // product info (bigger)
+        tblMain.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));   // case logs (fills the rest)
         tblMain.Controls.Add(pnlManual, 0, 0);
         tblMain.Controls.Add(pnlProductInfo, 0, 1);
         tblMain.Controls.Add(pnlLogs, 0, 2);
@@ -414,11 +414,13 @@ partial class MainForm
         Text = "C-Cube  -  Shipping Case Validation";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(940, 680);
+        // Lock the window: borderless (no title bar, so it can't be moved, resized,
+        // or double-clicked to un-maximize) and maximized to the work area (see the
+        // MaximizedBounds set in the constructor, which keeps the bottom above the
+        // taskbar). With the FormClosing guard (blocks Alt+F4), the station can only
+        // be ended via Task Manager, and it stays full screen at all times.
+        FormBorderStyle = FormBorderStyle.None;
         WindowState = FormWindowState.Maximized;
-        // Lock the window: no minimize / maximize / close buttons and no system menu,
-        // so the operator can't close or move the station off-screen. Combined with
-        // the FormClosing guard (blocks Alt+F4), the app can only be ended via Task
-        // Manager. It stays maximized and always on the full screen.
         ControlBox = false;
         MinimizeBox = false;
         MaximizeBox = false;

@@ -36,6 +36,16 @@ public partial class MainForm : Form
     public MainForm()
     {
         InitializeComponent();
+
+        // Constrain the maximized window to the work area (the screen minus the
+        // taskbar) so the bottom (Event Logs) is never hidden behind the taskbar.
+        // The form is borderless (no title bar), so there's nothing to double-click
+        // to un-maximize - it stays full screen.
+        if (Screen.PrimaryScreen is not null)
+        {
+            MaximizedBounds = Screen.PrimaryScreen.WorkingArea;
+        }
+
         LoadLogo();
         BuildHealthStrip();
         BuildProductInfo();
@@ -322,16 +332,16 @@ public partial class MainForm : Form
         var cap = new Label
         {
             Text = caption,
-            Font = Theme.SmallFont,
+            Font = Theme.InfoCaptionFont,
             ForeColor = Theme.Muted,
             Dock = DockStyle.Top,
-            Height = 16,
+            Height = 20,
             TextAlign = ContentAlignment.BottomLeft,
         };
         var value = new Label
         {
             Text = "—",
-            Font = Theme.CardStateFont,
+            Font = Theme.InfoValueFont,
             ForeColor = Theme.Text,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
