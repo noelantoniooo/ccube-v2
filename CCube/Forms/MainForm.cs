@@ -49,6 +49,30 @@ public partial class MainForm : Form
         // which looks wrong in dark mode).
         ThemeListHeaders(lvScans);
         ThemeListHeaders(lvEvents);
+
+        AddSplitterGrip();
+    }
+
+    // Draws a small row of dots in the middle of the Case Logs / Event Logs
+    // splitter so it's obvious the divider can be dragged to resize the panels.
+    private void AddSplitterGrip()
+    {
+        splitBody.Paint += (_, e) =>
+        {
+            Rectangle r = splitBody.SplitterRectangle;
+            int cx = r.X + r.Width / 2;
+            int cy = r.Y + r.Height / 2;
+            const int dot = 3, gap = 5, count = 5;
+            int total = (count - 1) * (dot + gap);
+            int startX = cx - total / 2;
+            using var brush = new SolidBrush(Theme.Muted);
+            for (int i = 0; i < count; i++)
+            {
+                e.Graphics.FillEllipse(brush, startX + i * (dot + gap) - dot / 2, cy - dot / 2, dot, dot);
+            }
+        };
+        // Repaint the grip after the splitter is dragged so it follows the bar.
+        splitBody.SplitterMoved += (_, _) => splitBody.Invalidate();
     }
 
     private static void ThemeListHeaders(ListView list)
