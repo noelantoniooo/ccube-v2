@@ -345,28 +345,20 @@ partial class MainForm
         pnlManual.BackColor = Theme.SurfaceAlt;
         pnlManual.BorderStyle = BorderStyle.FixedSingle;
         pnlManual.Visible = false;
-        var manualHint = new Label
-        {
-            Text = "SCAN BARCODE",
-            Font = Theme.BoldFont,
-            ForeColor = Theme.Accent,
-            AutoSize = true,
-            Location = new Point(16, 22),
-        };
-        // No Scan button: a real barcode scanner types the code and sends Enter, so
-        // the operator just scans into this box. It's big + monospaced so the barcode
-        // is easy to read. The box stretches to the right edge (anchored).
+        // The padding gives the textbox its margins and vertically centres it; Dock=Fill
+        // then stretches it across the bar (no overflow, no anchor maths needed).
+        pnlManual.Padding = new Padding(16, 14, 16, 8);
+        // No Scan button and no label: a real barcode scanner types the code and sends
+        // Enter, so the operator just scans into this box. It's big + monospaced so the
+        // barcode is easy to read; the placeholder text explains what to do.
+        txtManual.Dock = DockStyle.Fill;
         txtManual.Font = new Font("Consolas", 15F);
-        txtManual.Size = new Size(820, 34);
-        txtManual.Location = new Point(150, 12);
-        txtManual.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         txtManual.BackColor = Theme.Surface;
         txtManual.ForeColor = Theme.Text;
         txtManual.BorderStyle = BorderStyle.FixedSingle;
         txtManual.MaxLength = Plc.Db100Layout.BarcodeMaxLength; // 40 - same as the PLC field
         txtManual.PlaceholderText = "Scan or type a barcode, then press Enter";
         txtManual.KeyDown += txtManual_KeyDown;
-        pnlManual.Controls.Add(manualHint);
         pnlManual.Controls.Add(txtManual);
 
         // place rows
