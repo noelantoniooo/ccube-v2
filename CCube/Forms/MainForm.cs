@@ -22,6 +22,7 @@ public partial class MainForm : Form
 {
     private AppSettings _settings = new();
     private IPlcLink? _plcLink;
+    private DemoPlcLink? _demoPlc;   // set only in Demo mode; used by "Inject PLC case"
     private ScanEngine? _engine;
     private readonly HealthMonitor _health = new();
 
@@ -53,6 +54,7 @@ public partial class MainForm : Form
         // Give buttons a subtle hover/press response so clicks feel responsive.
         AddClickFeedback(btnConfig);
         AddClickFeedback(btnManual);
+        AddClickFeedback(btnInject);
         AddClickFeedback(btnTheme);
 
         // Theme the list column headers (WinForms draws them white by default,
@@ -152,7 +154,21 @@ public partial class MainForm : Form
             sinks.Add(new CsvHistoryRepository(_settings.HistoryCsvFolder));
             IHistorySink history = sinks.Count == 1 ? sinks[0] : new CompositeHistorySink(sinks.ToArray());
 
-            _plcLink = new S7PlcLink(_settings.Plc);
+            // Demo mode swaps the real Siemens link for an in-memory fake PLC so the
+            // whole read -> decode -> verdict -> write path runs without hardware. The
+            // "Inject PLC case" button (shown only here) presents cases to it.
+            if (_settings.DemoMode)
+            {
+                var demo = new DemoPlcLink();
+                _demoPlc = demo;
+                _plcLink = demo;
+                btnInject.Visible = true;
+                AppLog.Info("DEMO MODE: using a fake in-memory PLC. Use 'Inject PLC case' to present cases.");
+            }
+            else
+            {
+                _plcLink = new S7PlcLink(_settings.Plc);
+            }
 
             _engine = new ScanEngine(_plcLink, validator, history, _health, _settings.StationId, _settings.Masking);
             _engine.ScanCompleted += OnScanCompleted;
@@ -535,6 +551,89 @@ public partial class MainForm : Form
     }
 
     private void btnManual_Click(object? sender, EventArgs e) => ShowManual(!_manualVisible);
+
+    // Demo mode only: type a barcode and "inject" it into the fake PLC. The demo PLC
+    // writes it into its byte block and bumps SeqNo, so the scan loop picks it up as
+    // a real PLC case - a good place to set a breakpoint in DemoPlcLink.ReadInputs.
+    private void btnInject_Click(object? sender, EventArgs e)
+    {
+        if (_demoPlc is null)
+        {
+            return;
+        }
+
+        using var dlg = new Form
+        {
+            Text = "Inject PLC case (demo)",
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(560, 150),
+            BackColor = Theme.Panel,
+            ForeColor = Theme.Text,
+            Font = Theme.NormalFont,
+            MaximizeBox = false,
+            MinimizeBox = false,
+        };
+        var hint = new Label
+        {
+            Text = "Barcode to write into the fake PLC (it then bumps SeqNo):",
+            AutoSize = true,
+            Location = new Point(16, 14),
+            ForeColor = Theme.Muted,
+        };
+        var box = new TextBox
+        {
+            Text = "0110461200000001000001250921000007143005",
+            Location = new Point(16, 44),
+            Size = new Size(528, 30),
+            Font = new Font("Consolas", 12F),
+            BackColor = Theme.PanelDark,
+            ForeColor = Theme.Text,
+            BorderStyle = BorderStyle.FixedSingle,
+            MaxLength = Plc.Db100Layout.BarcodeMaxLength,
+        };
+        var inject = new Button
+        {
+            Text = "Inject",
+            Location = new Point(360, 96),
+            Size = new Size(90, 34),
+            BackColor = Theme.Accent,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+        };
+        inject.FlatAppearance.BorderSize = 0;
+        var close = new Button
+        {
+            Text = "Close",
+            DialogResult = DialogResult.Cancel,
+            Location = new Point(454, 96),
+            Size = new Size(90, 34),
+            BackColor = Theme.Idle,
+            ForeColor = Theme.Text,
+            FlatStyle = FlatStyle.Flat,
+        };
+        close.FlatAppearance.BorderSize = 0;
+
+        // Inject and keep the dialog open so you can present several cases in a row.
+        inject.Click += (_, _) =>
+        {
+            string barcode = box.Text.Trim();
+            if (barcode.Length > 0)
+            {
+                _demoPlc.InjectCase(barcode);
+                box.SelectAll();
+                box.Focus();
+            }
+        };
+
+        dlg.Controls.Add(hint);
+        dlg.Controls.Add(box);
+        dlg.Controls.Add(inject);
+        dlg.Controls.Add(close);
+        dlg.AcceptButton = inject;  // Enter injects
+        dlg.CancelButton = close;
+        dlg.ShowDialog(this);
+    }
 
     // Flip light/dark. The theme is chosen at start-up, so we save the choice and
     // restart the app to redraw everything cleanly in the new palette.

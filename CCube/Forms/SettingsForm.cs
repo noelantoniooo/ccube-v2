@@ -31,6 +31,7 @@ public sealed class SettingsForm : Form
 
     // General
     private TextBox _station = null!;
+    private CheckBox _demoMode = null!;
     // InExpress
     private TextBox _inxServer = null!, _inxDb = null!, _inxUser = null!, _inxPass = null!, _inxProc = null!;
     private Label _inxUserLbl = null!, _inxPassLbl = null!;
@@ -145,6 +146,7 @@ public sealed class SettingsForm : Form
         // --- General ---
         y = Section("General", y);
         _station = AddText("Station ID", ref y);
+        _demoMode = AddCheck("Demo mode (fake PLC — run/test without hardware)", ref y);
 
         // --- InExpress ---
         y = Section("InExpress database (validation)", y);
@@ -470,6 +472,7 @@ public sealed class SettingsForm : Form
     private void LoadFromSettings()
     {
         _station.Text = _settings.StationId;
+        _demoMode.Checked = _settings.DemoMode;
 
         _inxServer.Text = _settings.InExpress.Server;
         _inxDb.Text = _settings.InExpress.Database;
@@ -503,6 +506,7 @@ public sealed class SettingsForm : Form
         try
         {
             _settings.StationId = _station.Text.Trim();
+            _settings.DemoMode = _demoMode.Checked;
 
             _settings.InExpress.Server = _inxServer.Text.Trim();
             _settings.InExpress.Database = _inxDb.Text.Trim();

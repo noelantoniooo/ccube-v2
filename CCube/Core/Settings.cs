@@ -22,6 +22,10 @@ public sealed class AppSettings
     // Dark colour theme (off = light).
     public bool ThemeDark { get; set; }
 
+    // Demo mode: use a fake in-memory PLC (DemoPlcLink) instead of the real S7-1200,
+    // so the app can run and be demonstrated without hardware. Off for the plant.
+    public bool DemoMode { get; set; }
+
     // Where the daily CSV history backup is written (a folder per month is created
     // underneath). Edit in settings.json to point at a shared/plant location.
     public string HistoryCsvFolder { get; set; } = @"C:\CCube\History";

@@ -53,7 +53,7 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 |---|---|
 | `Program.cs` | App start-up: single-instance guard, opens `MainForm`. |
 | `Forms/` | The screens: `MainForm` (operator run screen), `SettingsForm`, `AdminPromptForm`, `Theme`. |
-| `Plc/` | The PLC contract + link. `Db100Layout`/`Db100Frame`/`S7Data` = the byte format; `IPlcLink` with `S7PlcLink` (real) and `DemoPlcLink` (fake); `ResultCode` (verdict reasons). |
+| `Plc/` | The PLC contract + link. `Db100Layout`/`Db100Frame`/`S7Data` = the byte format; `IPlcLink` with `S7PlcLink` (real) and `DemoPlcLink` (fake, in-memory - used when `DemoMode` is on); `ResultCode` (verdict reasons). |
 | `Core/` | The logic: `ScanEngine` (the loop), `Validation`, `HealthMonitor`, `Settings*`, `CredentialProtector`, `PasswordHasher`, `AppLog`. |
 | `Data/` | SQL seams: `IValidator`+`InExpressValidator` (the validate SP call → `CaseResult`), `IHistorySink` with `SqlHistoryRepository` (INSERT ScanHistory), `CsvHistoryRepository` (daily CSV backup) and `CompositeHistorySink` (writes to both at once). |
 | `Models/` | Small data holders like `ScanRecord`. |
@@ -113,6 +113,11 @@ WinForms drag-and-drop designer; VS Code works too but has no visual designer.)
   TIA Portal program. The DB must have "optimized block access" **off** and PUT/GET enabled.
 - **Connection strings / PLC IP / station id** are configured per-machine in `settings.json` — no
   code change to move from laptop to plant.
+- **Demo mode** (`settings.json` → `DemoMode`, or Configuration → "Demo mode"): swaps the real
+  `S7PlcLink` for `DemoPlcLink`, an in-memory fake PLC, so the whole read → decode → verdict → write
+  path runs without hardware. A header button **"Inject PLC case"** (shown only in Demo mode) writes
+  a barcode into the fake block and bumps SeqNo, so the scan loop processes it like a real case —
+  useful for debugging/demoing the PLC read path. Off for the plant.
 - **Barcode field positions** (v1's CBL rule, all in `Core/Validation.cs` → `BarcodeFields`,
   1-based chars): **Case Packer #** = chars 33-34; **Production Date/Time** = year 23-24,
   month 25-26, day 27-28, hour 35-36, min 37-38, sec 39-40. These feed display/history only,

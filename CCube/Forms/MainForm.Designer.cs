@@ -30,6 +30,7 @@ partial class MainForm
     private Label lblModeBadge = null!;
     private Button btnConfig = null!;
     private Button btnManual = null!;
+    private Button btnInject = null!;
     private Button btnTheme = null!;
     // Health strip (contents built in code)
     private Panel pnlHealth = null!;
@@ -86,6 +87,7 @@ partial class MainForm
         lblModeBadge = new Label();
         btnConfig = new Button();
         btnManual = new Button();
+        btnInject = new Button();
         btnTheme = new Button();
         pnlHealth = new Panel();
         pnlVerdict = new Panel();
@@ -182,6 +184,20 @@ partial class MainForm
         btnManual.Margin = new Padding(8, 0, 0, 0);
         btnManual.Cursor = Cursors.Hand;
         btnManual.Click += btnManual_Click;
+        // Demo-only: inject a fake PLC case. Hidden unless DemoMode is on (set in code).
+        btnInject.Text = "⤵  Inject PLC case";
+        btnInject.Font = Theme.BoldFont;
+        btnInject.ForeColor = Color.White;
+        btnInject.BackColor = Theme.LedAmber;
+        btnInject.FlatStyle = FlatStyle.Flat;
+        btnInject.FlatAppearance.BorderSize = 0;
+        btnInject.AutoSize = true;
+        btnInject.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        btnInject.Padding = new Padding(14, 6, 14, 6);
+        btnInject.Margin = new Padding(8, 0, 0, 0);
+        btnInject.Cursor = Cursors.Hand;
+        btnInject.Visible = false;
+        btnInject.Click += btnInject_Click;
         lblStation.Text = "Station: -";
         lblStation.Font = Theme.NormalFont;
         lblStation.ForeColor = Theme.HeaderText;
@@ -211,6 +227,7 @@ partial class MainForm
         headerRight.Controls.Add(btnTheme);
         headerRight.Controls.Add(btnConfig);
         headerRight.Controls.Add(btnManual);
+        headerRight.Controls.Add(btnInject);
         headerRight.Controls.Add(lblStation);
         headerRight.Controls.Add(lblModeBadge);
         pnlHeader.Controls.Add(headerRight);
