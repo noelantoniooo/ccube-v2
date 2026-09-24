@@ -81,8 +81,10 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 Two heartbeats run continuously (~500 ms): watch the **PLC heartbeat** (detect a hung PLC) and
 pulse our own **PC heartbeat** (so the PLC fail-safe-rejects if we die).
 
-**Machine # masking** (Configuration → checkbox + a grid of machine #s 11-46, stored in
-`settings.json` under `Masking`). When a scanned case's **Case Packer # (machine)** is ticked, the
+**Machine # masking** (Configuration → checkbox + a grid of machine #s, stored in `settings.json`
+under `Masking`). The roster of machines shown is `Masking.AllMachines`, a plain array that lives
+ONLY in `settings.json` (the code keeps no built-in list) — add/remove numbers there and restart;
+the grid just loops over whatever the file provides. `MaskedMachines` is the ticked subset. When a scanned case's **Case Packer # (machine)** is ticked, the
 case is still validated, saved to CCube + CSV, and shown with its **real** result — the *only*
 change is the signal sent back to the PLC in step 5 is forced to **GOOD**, so the case is
 physically kept (never ejected) whatever InExpress said. This is a deliberate operator override,

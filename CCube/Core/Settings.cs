@@ -43,13 +43,23 @@ public sealed class MaskingSettings
 {
     public bool Enabled { get; set; }
 
-    // The masked machine numbers (e.g. [11, 15, 22]). Only cases from these
-    // machines get the forced-GOOD signal to the PLC.
+    // The full roster of machine numbers the Configuration screen shows as
+    // checkboxes. The list lives ONLY in settings.json ("AllMachines"): add or
+    // remove a machine there and restart. The code keeps no built-in list - the
+    // grid simply loops over whatever settings.json provides.
+    public List<int> AllMachines { get; set; } = new();
+
+    // The masked subset (the ticked machines). Only cases from these get the
+    // forced-GOOD signal to the PLC.
     public List<int> MaskedMachines { get; set; } = new();
 
     /// <summary>True if this machine's cases should be kept regardless of the result.</summary>
     public bool IsMasked(int machineNumber) =>
         Enabled && MaskedMachines.Contains(machineNumber);
+
+    /// <summary>The roster from settings.json, sorted and de-duplicated.</summary>
+    public IReadOnlyList<int> Roster() =>
+        (AllMachines ?? new List<int>()).Distinct().OrderBy(m => m).ToList();
 }
 
 /// <summary>Connection to the plant's InExpress (MES) database.</summary>

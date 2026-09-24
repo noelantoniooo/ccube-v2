@@ -50,7 +50,6 @@ public sealed class SettingsForm : Form
     private CheckBox _maskEnabled = null!;
     private Panel _maskPanel = null!;
     private readonly Dictionary<int, CheckBox> _machineChecks = new();
-    private const int FirstMachine = 11, LastMachine = 46;
     // Buttons
     private Button _editButton = null!, _saveButton = null!, _changeAdminButton = null!;
     private Label _lockState = null!;
@@ -199,7 +198,7 @@ public sealed class SettingsForm : Form
 
         // --- Machine # masking ---
         y = Section("Machine # masking", y);
-        _maskEnabled = AddCheck("Enable masking (masked machines are always kept — PLC told GOOD)", ref y);
+        _maskEnabled = AddCheck("Enable masking", ref y);
         y = AddMachineGrid(ref y);
         // The machine grid only shows when masking is enabled.
         _maskEnabled.CheckedChanged += (_, _) =>
@@ -303,21 +302,24 @@ public sealed class SettingsForm : Form
         return (lbl, box);
     }
 
-    // A grid of machine-number checkboxes (11-46). Built as one panel so the whole
-    // block can be shown/hidden (and its space reclaimed) with the master checkbox.
+    // A grid of machine-number checkboxes. The list of machines comes from
+    // settings.json (Masking.AllMachines) - not hardcoded here - so it's just edit +
+    // restart to change. Built as one panel so the whole block can be shown/hidden
+    // (and its space reclaimed) with the master checkbox.
     private int AddMachineGrid(ref int y)
     {
         const int cols = 9, cellW = 66, cellH = 30;
-        int rows = (LastMachine - FirstMachine + cols) / cols; // ceil
+        IReadOnlyList<int> machines = _settings.Masking.Roster();
+        int rows = (machines.Count + cols - 1) / cols; // ceil
         _maskPanel = new Panel
         {
             Location = new Point(24, y),
-            Size = new Size(cols * cellW, rows * cellH + 4),
+            Size = new Size(cols * cellW, Math.Max(1, rows) * cellH + 4),
             BackColor = Theme.Background,
         };
-        for (int machine = FirstMachine; machine <= LastMachine; machine++)
+        int idx = 0;
+        foreach (int machine in machines)
         {
-            int idx = machine - FirstMachine;
             var box = new CheckBox
             {
                 Text = machine.ToString(),
@@ -329,6 +331,7 @@ public sealed class SettingsForm : Form
             _machineChecks[machine] = box;
             _editable.Add(box);
             _maskPanel.Controls.Add(box);
+            idx++;
         }
         _body.Controls.Add(_maskPanel);
         RegisterRow(y, _maskPanel.Height + 12, _maskPanel);
