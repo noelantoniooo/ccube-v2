@@ -154,7 +154,7 @@ public partial class MainForm : Form
 
             _plcLink = new S7PlcLink(_settings.Plc);
 
-            _engine = new ScanEngine(_plcLink, validator, history, _health, _settings.StationId);
+            _engine = new ScanEngine(_plcLink, validator, history, _health, _settings.StationId, _settings.Masking);
             _engine.ScanCompleted += OnScanCompleted;
             _health.Changed += OnHealthChanged;
             _engine.Start();

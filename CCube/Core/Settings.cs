@@ -30,6 +30,26 @@ public sealed class AppSettings
     public CCubeSettings CCube { get; set; } = new();
     public PlcSettings Plc { get; set; } = new();
     public AdminSettings Admin { get; set; } = new();
+    public MaskingSettings Masking { get; set; } = new();
+}
+
+/// <summary>
+/// Machine # masking. When enabled, a case whose case-packer (machine) number is
+/// ticked is validated and logged exactly as usual, but the verdict sent back to
+/// the PLC is forced to GOOD so the case is physically kept (never ejected) - the
+/// only thing masking changes. Machine numbers run 11-46.
+/// </summary>
+public sealed class MaskingSettings
+{
+    public bool Enabled { get; set; }
+
+    // The masked machine numbers (e.g. [11, 15, 22]). Only cases from these
+    // machines get the forced-GOOD signal to the PLC.
+    public List<int> MaskedMachines { get; set; } = new();
+
+    /// <summary>True if this machine's cases should be kept regardless of the result.</summary>
+    public bool IsMasked(int machineNumber) =>
+        Enabled && MaskedMachines.Contains(machineNumber);
 }
 
 /// <summary>Connection to the plant's InExpress (MES) database.</summary>

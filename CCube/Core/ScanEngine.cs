@@ -27,6 +27,7 @@ public sealed class ScanEngine : IDisposable
     private readonly IHistorySink _history;
     private readonly HealthMonitor _health;
     private readonly string _stationId;
+    private readonly MaskingSettings _masking;
 
     private readonly int _pollMs = 200;
     private readonly int _plcWatchdogMs = 2000;   // PLC is "dead" if its heartbeat freezes this long
@@ -49,13 +50,14 @@ public sealed class ScanEngine : IDisposable
     public event Action<ScanRecord>? ScanCompleted;
 
     public ScanEngine(IPlcLink plc, IValidator validator, IHistorySink history,
-        HealthMonitor health, string stationId)
+        HealthMonitor health, string stationId, MaskingSettings? masking = null)
     {
         _plc = plc;
         _validator = validator;
         _history = history;
         _health = health;
         _stationId = stationId;
+        _masking = masking ?? new MaskingSettings();
     }
 
     public void Start()
@@ -173,11 +175,22 @@ public sealed class ScanEngine : IDisposable
         (ResultCode code, CaseResult? info, int inExpressMs) =
             DecideVerdict(barcode, inputs.ScannerNoRead, $"seq {inputs.SeqNo}");
 
+        // Machine # masking: if this case's machine is masked, force the PLC signal
+        // to GOOD so the case is physically kept, whatever the real result was. Only
+        // the PLC signal changes - history/display below still record the real result.
+        bool masked = IsMachineMasked(barcode);
+        ResultCode plcCode = masked ? ResultCode.Ok : code;
+        if (masked && !code.IsPass())
+        {
+            AppLog.Info($"Case seq {inputs.SeqNo}: machine # masked -> PLC told GOOD "
+                + $"(actual result {code}). Logged as-is.");
+        }
+
         try
         {
             _outputs.ResultValid = true;
-            _outputs.ResultGood = code.IsPass();
-            _outputs.ResultCode = code;
+            _outputs.ResultGood = plcCode.IsPass();
+            _outputs.ResultCode = plcCode;
             _outputs.PcOnline = _validatorHealthy;
             _outputs.AckSeqNo = inputs.SeqNo; // written last = the verdict is ready
             _plc.WriteOutputs(_outputs);
@@ -203,6 +216,21 @@ public sealed class ScanEngine : IDisposable
             DecideVerdict(barcode, scannerNoRead, "manual");
 
         Report(barcode, code, info, inExpressMs, startedAt, "Manual check");
+    }
+
+    // ---- Machine # masking ---------------------------------------------------
+
+    // True if this case's machine (case-packer number, parsed from the barcode) is
+    // one the operator ticked to mask. A no-read/short barcode has no machine # to
+    // read, so it's never masked (handled as usual).
+    private bool IsMachineMasked(string barcode)
+    {
+        if (!_masking.Enabled || _masking.MaskedMachines.Count == 0)
+        {
+            return false;
+        }
+        string? casePacker = BarcodeFields.CasePacker(barcode);
+        return int.TryParse(casePacker, out int machine) && _masking.IsMasked(machine);
     }
 
     // ---- Deciding the verdict ------------------------------------------------

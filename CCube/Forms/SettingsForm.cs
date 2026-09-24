@@ -46,6 +46,11 @@ public sealed class SettingsForm : Form
     private TextBox _plcIp = null!;
     private NumericUpDown _plcRack = null!, _plcSlot = null!, _plcDb = null!;
     private Label _plcResult = null!;
+    // Machine # masking
+    private CheckBox _maskEnabled = null!;
+    private Panel _maskPanel = null!;
+    private readonly Dictionary<int, CheckBox> _machineChecks = new();
+    private const int FirstMachine = 11, LastMachine = 46;
     // Buttons
     private Button _editButton = null!, _saveButton = null!, _changeAdminButton = null!;
     private Label _lockState = null!;
@@ -192,6 +197,17 @@ public sealed class SettingsForm : Form
             await RunTest(btnTestPlc, _plcResult, () => ConnectionTester.TestPlc(ip));
         };
 
+        // --- Machine # masking ---
+        y = Section("Machine # masking", y);
+        _maskEnabled = AddCheck("Enable masking (masked machines are always kept — PLC told GOOD)", ref y);
+        y = AddMachineGrid(ref y);
+        // The machine grid only shows when masking is enabled.
+        _maskEnabled.CheckedChanged += (_, _) =>
+        {
+            _maskPanel.Visible = _maskEnabled.Checked;
+            RelayoutBody();
+        };
+
         // (No Security section on the page - the admin password is only asked for
         // when you click Edit, and can be changed from the button in the bar below.)
 
@@ -285,6 +301,38 @@ public sealed class SettingsForm : Form
         RegisterRow(y, 36, lbl, box);
         y += 36;
         return (lbl, box);
+    }
+
+    // A grid of machine-number checkboxes (11-46). Built as one panel so the whole
+    // block can be shown/hidden (and its space reclaimed) with the master checkbox.
+    private int AddMachineGrid(ref int y)
+    {
+        const int cols = 9, cellW = 66, cellH = 30;
+        int rows = (LastMachine - FirstMachine + cols) / cols; // ceil
+        _maskPanel = new Panel
+        {
+            Location = new Point(24, y),
+            Size = new Size(cols * cellW, rows * cellH + 4),
+            BackColor = Theme.Background,
+        };
+        for (int machine = FirstMachine; machine <= LastMachine; machine++)
+        {
+            int idx = machine - FirstMachine;
+            var box = new CheckBox
+            {
+                Text = machine.ToString(),
+                Location = new Point((idx % cols) * cellW, (idx / cols) * cellH),
+                Size = new Size(cellW - 6, cellH - 4),
+                ForeColor = Theme.Text,
+                AutoSize = false,
+            };
+            _machineChecks[machine] = box;
+            _editable.Add(box);
+            _maskPanel.Controls.Add(box);
+        }
+        _body.Controls.Add(_maskPanel);
+        RegisterRow(y, _maskPanel.Height + 12, _maskPanel);
+        return y + _maskPanel.Height + 12;
     }
 
     private CheckBox AddCheck(string label, ref int y)
@@ -438,6 +486,13 @@ public sealed class SettingsForm : Form
         _plcRack.Value = Math.Clamp(_settings.Plc.Rack, 0, 7);
         _plcSlot.Value = Math.Clamp(_settings.Plc.Slot, 0, 31);
         _plcDb.Value = Math.Clamp(_settings.Plc.DbNumber, 1, 60000);
+
+        _maskEnabled.Checked = _settings.Masking.Enabled;
+        foreach ((int machine, CheckBox box) in _machineChecks)
+        {
+            box.Checked = _settings.Masking.MaskedMachines.Contains(machine);
+        }
+        _maskPanel.Visible = _maskEnabled.Checked;
     }
 
     private void SaveChanges()
@@ -464,6 +519,13 @@ public sealed class SettingsForm : Form
             _settings.Plc.Rack = (int)_plcRack.Value;
             _settings.Plc.Slot = (int)_plcSlot.Value;
             _settings.Plc.DbNumber = (int)_plcDb.Value;
+
+            _settings.Masking.Enabled = _maskEnabled.Checked;
+            _settings.Masking.MaskedMachines = _machineChecks
+                .Where(kv => kv.Value.Checked)
+                .Select(kv => kv.Key)
+                .OrderBy(m => m)
+                .ToList();
 
             SettingsStore.Save(_settings);
             SavedChanges = true;

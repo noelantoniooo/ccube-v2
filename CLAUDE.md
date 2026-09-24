@@ -81,6 +81,14 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 Two heartbeats run continuously (~500 ms): watch the **PLC heartbeat** (detect a hung PLC) and
 pulse our own **PC heartbeat** (so the PLC fail-safe-rejects if we die).
 
+**Machine # masking** (Configuration → checkbox + a grid of machine #s 11-46, stored in
+`settings.json` under `Masking`). When a scanned case's **Case Packer # (machine)** is ticked, the
+case is still validated, saved to CCube + CSV, and shown with its **real** result — the *only*
+change is the signal sent back to the PLC in step 5 is forced to **GOOD**, so the case is
+physically kept (never ejected) whatever InExpress said. This is a deliberate operator override,
+so it doesn't violate the fail-safe rule (it's an explicit config, not silence). It's checked in
+`ScanEngine.IsMachineMasked` and applied only on the PLC path (manual scans don't touch the PLC).
+
 ## Build / run / test
 
 ```powershell
