@@ -89,16 +89,14 @@ BEGIN
         RETURN;
     END
 
-    /* Unknown barcode -> simulate a lookup so ad-hoc/manual scans still show data.
-       Rule: a barcode containing 'REJECT' or 'FAIL' is invalid; anything else is
-       valid. PMI's real proc will simply not return a row (or return IsValid = 0)
-       for a case it doesn't recognise. */
+    /* Unknown barcode -> NOT valid. A case InExpress doesn't recognise must be
+       REJECTED (fail-safe), exactly as PMI's real proc would. We still return the
+       one-row shape the app expects, just with no product data and IsValid = 0. */
     SELECT
-        CAST(NULL AS INT)                                       AS Id,
-        CAST('Simulated Product' AS NVARCHAR(100))              AS ProductDescription,
-        CAST('SIM-0000'          AS NVARCHAR(30))               AS FaCode,
-        CASE WHEN @Barcode LIKE '%REJECT%' OR @Barcode LIKE '%FAIL%'
-             THEN CAST(0 AS BIT) ELSE CAST(1 AS BIT) END        AS IsValid;
+        CAST(NULL AS INT)            AS Id,
+        CAST(NULL AS NVARCHAR(100))  AS ProductDescription,
+        CAST(NULL AS NVARCHAR(30))   AS FaCode,
+        CAST(0 AS BIT)               AS IsValid;
 END
 GO
 
