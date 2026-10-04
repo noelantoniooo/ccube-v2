@@ -58,7 +58,7 @@ This is a C# rebuild of the original VB.NET app (`C:\Users\Asus\Projects\CCubev1
 | `Data/` | SQL seams: `IValidator`+`InExpressValidator` (the validate SP call → `CaseResult`), `IHistorySink` with `SqlHistoryRepository` (INSERT ScanHistory), `CsvHistoryRepository` (daily CSV backup) and `CompositeHistorySink` (writes to both at once). |
 | `Models/` | Small data holders like `ScanRecord`. |
 | `database/` | SQL scripts: CCube schema + the InExpress validate proc (reference stub). |
-| `scripts/` | `build.ps1`, `start.ps1`, `publish.ps1`, `watch-log.ps1`. |
+| `scripts/` | `build.ps1`, `start.ps1`, `publish.ps1`, `watch-log.ps1`, `clear-history.ps1`. |
 | `docs/` | `DESIGN.md` (living spec) and `HOW-TO-BUILD-RUN-DEBUG.md`. |
 
 ## The scan loop (the heart of the app)
@@ -98,6 +98,7 @@ so it doesn't violate the fail-safe rule (it's an explicit config, not silence).
 .\scripts\start.ps1      # build + run
 .\scripts\publish.ps1    # make the deployable, self-contained plant build
 .\scripts\watch-log.ps1  # watch live logs
+.\scripts\clear-history.ps1   # wipe dbo.ScanHistory on a TEST DB (asks to confirm; -IncludeCsv, -Force)
 ```
 
 Or in **Visual Studio 2022**: open `CCube.slnx`, press **F5**. (Visual Studio is recommended for the
